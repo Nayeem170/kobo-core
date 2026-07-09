@@ -1,0 +1,37 @@
+[package]
+name = "kobo-core"
+version = "0.1.0"
+edition = "2021"
+description = "Kobo e-reader device SDK: device database, sysfs/ioctl, rendering, audio pipeline, trait surface"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/Nayeem170/kobo-core"
+documentation = "https://docs.rs/kobo-core"
+keywords = ["kobo", "ereader", "e-ink", "embedded", "framebuffer"]
+categories = ["embedded", "hardware-support", "multimedia::audio"]
+
+[features]
+default = ["device", "rendering", "audio", "reader"]
+device = []
+rendering = []
+audio = []
+reader = ["dep:epub", "dep:scraper", "dep:thiserror"]
+
+[dependencies]
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+epub = { version = "2", optional = true }
+scraper = { version = "0.20", optional = true }
+thiserror = { version = "1", optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "sync", "net", "io-util"] }
+libc = "0.2"
+kothok-edge-tts = "0.2"
+rubato = "0.15"
+symphonia = { version = "0.5", default-features = false, features = ["mp3", "pcm"] }
+fontdue = "0.9"
+rustybuzz = "0.18"
+
+[dev-dependencies]
+zip = "0.6"
+tempfile = "3"
