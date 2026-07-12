@@ -42,12 +42,14 @@ pub fn bt_toggle_age_ms() -> u64 {
 /// every BT operation). Matching develop's hard-coded per-platform value is both
 /// correct and proven.
 static BT_BUS: OnceLock<&'static str> = OnceLock::new();
+const BT_BUS_MTK: &str = "com.kobo.mtk.bluedroid";
+const BT_BUS_BLUEZ: &str = "org.bluez";
 
 /// Set the BT bus once from the detected SoC family. Called at startup.
 pub fn set_bt_bus(soc: SocFamily) {
     let bus = match soc {
-        SocFamily::Mtk => "com.kobo.mtk.bluedroid",
-        SocFamily::Nxp | SocFamily::Sunxi => "org.bluez",
+        SocFamily::Mtk => BT_BUS_MTK,
+        SocFamily::Nxp | SocFamily::Sunxi => BT_BUS_BLUEZ,
     };
     let _ = BT_BUS.set(bus);
     info!("bt: bus = {} ({:?})", bus, soc);
@@ -56,7 +58,7 @@ pub fn set_bt_bus(soc: SocFamily) {
 /// Returns the active BT bus name. Falls back to the MTK bus if startup hasn't
 /// set it yet (all currently-shipping colour/MTK devices).
 pub fn bt_bus() -> &'static str {
-    BT_BUS.get().copied().unwrap_or("com.kobo.mtk.bluedroid")
+    BT_BUS.get().copied().unwrap_or(BT_BUS_MTK)
 }
 
 /// One-time BT diagnostic at startup: log the bus, whether nickel's BT config
@@ -84,6 +86,8 @@ const DBUS_PROPS_GET: &str = "org.freedesktop.DBus.Properties.Get";
 const DBUS_PROPS_SET: &str = "org.freedesktop.DBus.Properties.Set";
 const DBUS_DEVICE1_PATH: &str = "/org/bluez/hci0";
 const DBUS_OBJECT_MANAGER: &str = "org.freedesktop.DBus.ObjectManager.GetManagedObjects";
+const DBUS_DEVICE1_CONNECT: &str = "org.bluez.Device1.Connect";
+const DBUS_DEVICE1_DISCONNECT: &str = "org.bluez.Device1.Disconnect";
 
 /// Returns a `dbus-send` Command pre-configured with the detected BT bus name.
 fn dbus_cmd() -> Command {
@@ -309,7 +313,7 @@ pub fn bt_toggle(on: bool) {
         std::thread::spawn(move || {
             if let Some(dev) = bt_target_device() {
                 if let Err(e) = dbus_cmd()
-                    .args([&dev, "org.bluez.Device1.Disconnect"])
+                    .args([&dev, DBUS_DEVICE1_DISCONNECT])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .status()
@@ -355,7 +359,7 @@ pub fn reconnect_bt() {
     std::thread::sleep(std::time::Duration::from_millis(800));
     for attempt in 1..=6 {
         let rc = dbus_cmd()
-            .args([&dev, "org.bluez.Device1.Connect"])
+            .args([&dev, DBUS_DEVICE1_CONNECT])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
