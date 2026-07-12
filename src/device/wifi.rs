@@ -15,6 +15,8 @@ const WPA_CONF_PATHS: &[&str] = &[
     "/etc/wpa_supplicant/wpa_supplicant.conf",
     "/mnt/onboard/.kobo/wpa_supplicant.conf",
     "/tmp/wpa_supplicant.conf",
+    "/etc/wpa_supplicant-wlan0.conf",
+    "/data/misc/wifi/wpa_supplicant.conf",
 ];
 const WIFI_DAEMONS: &[&str] = &["dhcpcd", "udhcpc"];
 
@@ -50,60 +52,130 @@ pub fn wifi_toggle(on: bool) {
     LAST_WIFI_TOGGLE_MS.store(now_ms(), Ordering::Relaxed);
     std::thread::spawn(move || {
         if on {
-            let _ = fs::write("/sys/class/rfkill/rfkill0/soft", "0");
-            let _ = Command::new("rfkill").args(["unblock", "wifi"]).status();
-
-            if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "up"]).status() {
-                warn!("wifi: ifconfig up failed: {e}");
-            }
-            std::thread::sleep(std::time::Duration::from_millis(1000));
-
-            let wpa_running = Command::new("pgrep")
-                .args(["-x", "wpa_supplicant"])
-                .output()
-                .map(|o| !o.stdout.is_empty())
-                .unwrap_or(false);
-
-            if wpa_running {
-                info!("wifi: wpa_supplicant already running, requesting reconnect");
-            } else {
-                let conf = WPA_CONF_PATHS
-                    .iter()
-                    .find(|p| std::path::Path::new(p).exists());
-
-                if let Some(conf) = conf {
-                    if let Err(e) = Command::new("wpa_supplicant")
-                        .args(["-B", "-i", WLAN_IFACE, "-c", conf])
-                        .status()
-                    {
-                        warn!("wifi: wpa_supplicant start failed: {e}");
-                    }
-                    info!("wifi: wpa_supplicant started with {conf}");
-                } else {
-                    info!("wifi: no wpa_supplicant.conf found - connect from Kobo settings first");
-                }
-            }
-
-            let _ = Command::new("wpa_cli")
-                .args(["-i", WLAN_IFACE, "reconnect"])
-                .status();
-
-            if let Err(e) = Command::new("dhcpcd").args([WLAN_IFACE]).status() {
-                let _ = Command::new("udhcpc").args(["-i", WLAN_IFACE, "-q"]).status();
-                warn!("wifi: dhcpcd failed, tried udhcpc: {e}");
-            }
-            info!("wifi: turned ON");
+            wifi_turn_on();
         } else {
-            let _ = Command::new("killall").args(["-q"]).args(WIFI_DAEMONS).status();
-            let _ = Command::new("wpa_cli")
-                .args(["-i", WLAN_IFACE, "disconnect"])
-                .status();
-            if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "down"]).status() {
-                warn!("wifi: ifconfig down failed: {e}");
-            }
-            info!("wifi: turned OFF");
+            wifi_turn_off();
         }
     });
+}
+
+fn find_wpa_conf() -> Option<String> {
+    for p in WPA_CONF_PATHS {
+        if std::path::Path::new(p).exists() {
+            info!("wifi: config found at {p}");
+            return Some((*p).to_string());
+        }
+    }
+    info!("wifi: config not at known paths, searching filesystem...");
+    for dir in &["/etc", "/mnt/onboard/.kobo", "/var", "/data"] {
+        if let Ok(out) = Command::new("find")
+            .args([dir, "-name", "wpa_supplicant*.conf", "-type", "f"])
+            .output()
+        {
+            let found = String::from_utf8_lossy(&out.stdout);
+            for line in found.lines() {
+                let path = line.trim();
+                if !path.is_empty() && std::path::Path::new(path).exists() {
+                    info!("wifi: config found via search: {path}");
+                    return Some(path.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn wifi_turn_on() {
+    let _ = fs::write("/sys/class/rfkill/rfkill0/soft", "0");
+    let _ = Command::new("rfkill").args(["unblock", "wifi"]).status();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "up"]).status() {
+        warn!("wifi: ifconfig up failed: {e}");
+    }
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+
+    let wpa_running = Command::new("pgrep")
+        .args(["-x", "wpa_supplicant"])
+        .output()
+        .map(|o| !o.stdout.is_empty())
+        .unwrap_or(false);
+
+    if wpa_running {
+        info!("wifi: wpa_supplicant already running, reconfiguring");
+        let _ = Command::new("wpa_cli")
+            .args(["-i", WLAN_IFACE, "reconfigure"])
+            .status();
+    } else {
+        let conf = find_wpa_conf();
+        match conf {
+            Some(ref conf_path) => {
+                match Command::new("wpa_supplicant")
+                    .args(["-B", "-i", WLAN_IFACE, "-c", conf_path])
+                    .output()
+                {
+                    Ok(out) if out.status.success() => {
+                        info!("wifi: wpa_supplicant started with {conf_path}");
+                    }
+                    Ok(out) => {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        warn!("wifi: wpa_supplicant failed: {}", stderr.trim());
+                    }
+                    Err(e) => {
+                        warn!("wifi: wpa_supplicant binary not found: {e}");
+                    }
+                }
+            }
+            None => {
+                warn!("wifi: no wpa_supplicant.conf found anywhere on device");
+            }
+        }
+    }
+
+    let _ = Command::new("wpa_cli")
+        .args(["-i", WLAN_IFACE, "reconnect"])
+        .status();
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    let mut got_carrier = false;
+    for i in 0..30 {
+        let carrier = fs::read_to_string(WLAN_CARRIER_PATH).unwrap_or_default();
+        if carrier.trim() == "1" {
+            info!("wifi: carrier acquired after {} poll(s)", i + 1);
+            got_carrier = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    if !got_carrier {
+        warn!("wifi: no carrier after 15s");
+        if let Ok(out) = Command::new("wpa_cli")
+            .args(["-i", WLAN_IFACE, "status"])
+            .output()
+        {
+            let status = String::from_utf8_lossy(&out.stdout);
+            warn!("wifi: wpa status: {}", status.trim());
+        }
+    }
+
+    if got_carrier {
+        if let Err(e) = Command::new("dhcpcd").args([WLAN_IFACE]).status() {
+            let _ = Command::new("udhcpc").args(["-i", WLAN_IFACE, "-q"]).status();
+            warn!("wifi: dhcpcd failed, tried udhcpc: {e}");
+        }
+    }
+    info!("wifi: turned ON (carrier={got_carrier})");
+}
+
+fn wifi_turn_off() {
+    let _ = Command::new("killall").args(["-q"]).args(WIFI_DAEMONS).status();
+    let _ = Command::new("wpa_cli")
+        .args(["-i", WLAN_IFACE, "disconnect"])
+        .status();
+    if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "down"]).status() {
+        warn!("wifi: ifconfig down failed: {e}");
+    }
+    info!("wifi: turned OFF");
 }
 
 pub fn wifi_name() -> Option<String> {
