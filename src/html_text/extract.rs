@@ -1,4 +1,4 @@
-//! DOM extraction: chapter XHTML → plain text + per-block-element segments.
+//! DOM extraction: chapter XHTML -> plain text + per-block-element segments.
 
 use scraper::{Html, Selector};
 use std::sync::LazyLock;
@@ -344,14 +344,14 @@ mod tests {
     fn extracts_images_with_captions() {
         let xhtml = r#"<p>Intro.</p>
             <figure><img src="images/fox.png" alt="A fox"/>
-              <figcaption>Fig. 1 — the fox leaps.</figcaption></figure>
+              <figcaption>Fig. 1 - the fox leaps.</figcaption></figure>
             <p>Body.</p>
             <img src="images/inline.jpg" alt="inline pic"/>"#;
         let imgs = images(xhtml);
         assert_eq!(imgs.len(), 2);
         assert_eq!(imgs[0].src, "images/fox.png");
         assert_eq!(imgs[0].alt, "A fox");
-        assert_eq!(imgs[0].caption, "Fig. 1 — the fox leaps.");
+        assert_eq!(imgs[0].caption, "Fig. 1 - the fox leaps.");
         assert_eq!(imgs[1].src, "images/inline.jpg");
         assert!(imgs[1].caption.is_empty());
     }

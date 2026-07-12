@@ -59,7 +59,7 @@ pub fn detect_device() -> Option<DeviceConfig> {
     match lookup_device(&codename) {
         Some(d) => {
             info!(
-                "hw: detected {} ({}) — {} SoC, {}x{} config, touch={:?}, bt={}",
+                "hw: detected {} ({}) - {} SoC, {}x{} config, touch={:?}, bt={}",
                 d.model,
                 d.codename,
                 match d.soc {
@@ -106,7 +106,7 @@ pub fn scan_input_devices() -> Option<InputDevices> {
     }
     match (touch_path, power_path) {
         (Some(t), Some(p)) => {
-            info!("hw: input scan — touch={}, power={}", t, p);
+            info!("hw: input scan - touch={}, power={}", t, p);
             Some(InputDevices {
                 touch_dev: t,
                 power_dev: p,
@@ -114,7 +114,7 @@ pub fn scan_input_devices() -> Option<InputDevices> {
         }
         (Some(t), None) => {
             info!(
-                "hw: input scan — touch={}, power=not found (touch-to-wake only)",
+                "hw: input scan - touch={}, power=not found (touch-to-wake only)",
                 t
             );
             Some(InputDevices {
@@ -138,7 +138,7 @@ pub fn automagic_battery(cfg: &mut DeviceConfig) {
     for path in &candidates {
         if fs::metadata(path).is_ok() {
             cfg.battery_sysfs = path.to_string();
-            info!("hw: automagic battery → {}", path);
+            info!("hw: automagic battery -> {}", path);
             return;
         }
     }
@@ -156,7 +156,7 @@ pub fn automagic_frontlight(cfg: &mut DeviceConfig) {
     for mixer in &mixers {
         if fs::metadata(mixer).is_ok() {
             cfg.frontlight.mixer_path = Some(mixer.to_string());
-            info!("hw: automagic FL mixer → {}", mixer);
+            info!("hw: automagic FL mixer -> {}", mixer);
             return;
         }
     }

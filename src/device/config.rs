@@ -1,4 +1,4 @@
-//! Pure device configuration types and lookup — no IO.
+//! Pure device configuration types and lookup - no IO.
 //!
 //! These types describe per-model hardware capabilities. IO-bound detection
 //! (`detect_device`, `scan_input_devices`, `automagic_*`) lives in the app

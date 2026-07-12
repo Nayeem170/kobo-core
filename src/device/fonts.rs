@@ -1,7 +1,7 @@
 //! Font loading from the on-device font directory.
 //!
 //! Non-Latin fonts (Bengali/Devanagari/Arabic/Thai/CJK) are NOT downloaded at
-//! runtime — the Kobo wget cannot complete HTTPS. Instead they are fetched by
+//! runtime - the Kobo wget cannot complete HTTPS. Instead they are fetched by
 //! the USB installer (`install-usb.ps1`) and placed in `/mnt/onboard/.adds/fonts`
 //! at install time. This module just loads them from disk at startup / on demand.
 //! The default font (NotoSansLatin, covering Latin) is embedded in the binary.
@@ -201,8 +201,8 @@ pub fn load_cached_fonts() {
 
 /// Ensure a font for a book's script is loaded. Returns a status string for the
 /// tips display when the font is missing (install wasn't run / font deleted):
-/// - Font already installed or on disk → None (loaded if needed)
-/// - Font not on disk → a short message telling the user to reinstall
+/// - Font already installed or on disk -> None (loaded if needed)
+/// - Font not on disk -> a short message telling the user to reinstall
 pub fn ensure_font_for_script(lang: Option<&str>, sample_text: &str) -> Option<String> {
     let script = lang
         .map(lang_to_script)

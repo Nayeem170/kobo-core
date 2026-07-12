@@ -8,7 +8,7 @@ use crate::device::input::EV_KEY;
 
 // A single physical power press on the Kobo emits repeated EV_KEY press (val=1)
 // events. Without debouncing, those bounce events toggle sleep/wake in rapid
-// succession — the multi-frame cover<->book flicker on wake. Ignore presses
+// succession - the multi-frame cover<->book flicker on wake. Ignore presses
 // within this window of the last accepted press.
 const POWER_DEBOUNCE_MS: u64 = 300;
 
@@ -103,11 +103,11 @@ pub fn spawn_power_monitor(pressed: Arc<AtomicBool>, exit: Arc<AtomicBool>, powe
     });
 }
 
-/// Pure decision: does a press→release pair count as a wake swipe-up?
-/// Extracted from poll_touch_for_wake so the threshold is unit-testable (§11).
+/// Pure decision: does a press->release pair count as a wake swipe-up?
+/// Extracted from poll_touch_for_wake so the threshold is unit-testable (S11).
 /// Requires a long, deliberate swipe: it must start in the bottom ~40% of the
 /// screen, travel upward at least ~40% of the screen height, and be more
-/// vertical than horizontal — so a short accidental flick won't unlock.
+/// vertical than horizontal - so a short accidental flick won't unlock.
 fn is_wake_swipe(
     press_x: f32,
     press_y: f32,

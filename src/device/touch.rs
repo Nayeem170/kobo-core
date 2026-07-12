@@ -1,4 +1,4 @@
-//! Touch→display transform + gesture predicates.
+//! Touch->display transform + gesture predicates.
 //!
 //! The transform uses per-device flags from `DeviceConfig`:
 //! - `touch_switch_xy`: swap X and Y axes
@@ -22,7 +22,7 @@ pub struct TouchConfig {
     pub screen_h: i32,
 }
 
-/// Raw evdev → display-space transform.
+/// Raw evdev -> display-space transform.
 pub fn to_display(rx: i32, ry: i32, cfg: &TouchConfig) -> (f32, f32) {
     let (mut x, mut y) = if cfg.switch_xy { (ry, rx) } else { (rx, ry) };
 

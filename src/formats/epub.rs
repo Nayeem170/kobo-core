@@ -1,5 +1,5 @@
 //! EPUB reading: open the book, walk the spine, and turn each chapter's XHTML
-//! into plain text + a char-offset→element map (via [`crate::html_text`]).
+//! into plain text + a char-offset->element map (via [`crate::html_text`]).
 //!
 //! A `WordMark` from the audio spine maps to chapter text as: the synthesized
 //! utterance is a slice of `Chapter::text` at a known char range; the word's
@@ -26,7 +26,7 @@ pub struct Chapter {
     pub text: String,
     pub segments: Vec<TextSegment>,
     /// Preloaded image data: (relative src path, raw file bytes).
-    /// Populated lazily by `load_images` — empty after `EpubBook::open`.
+    /// Populated lazily by `load_images` - empty after `EpubBook::open`.
     pub images: Vec<(String, Vec<u8>)>,
     /// EPUB file path (for lazy image loading via `load_images`).
     pub epub_path: String,
@@ -36,7 +36,7 @@ pub struct Chapter {
 
 impl Chapter {
     /// Build a chapter from its XHTML (loader path + unit-testable without a
-    /// real EPUB file — see the html_text tests).
+    /// real EPUB file - see the html_text tests).
     pub fn from_xhtml(index: usize, title: Option<String>, xhtml: &str) -> Self {
         let (text, segments) = extract(xhtml);
         Chapter {
@@ -93,7 +93,7 @@ pub struct EpubBook {
 }
 
 impl EpubBook {
-    /// Extract only the cover image bytes from an EPUB — no spine walk.
+    /// Extract only the cover image bytes from an EPUB - no spine walk.
     pub fn cover_bytes(path: impl AsRef<Path>) -> Option<Vec<u8>> {
         let mut doc = epub::doc::EpubDoc::new(path.as_ref()).ok()?;
         let (data, _mime) = doc.get_cover()?;
@@ -166,7 +166,7 @@ impl EpubBook {
 }
 
 /// Flatten the EPUB TOC tree into a label-by-path map.
-/// NCX `content` paths may carry `#fragment` suffixes — stripped before lookup.
+/// NCX `content` paths may carry `#fragment` suffixes - stripped before lookup.
 fn build_toc_map(toc: &[epub::doc::NavPoint]) -> std::collections::HashMap<String, String> {
     let mut map = std::collections::HashMap::new();
     let mut flat = Vec::new();

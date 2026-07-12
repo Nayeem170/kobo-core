@@ -1,12 +1,12 @@
-//! `StubPlayer` — a headless stub proving the control + shared-clock + highlight
+//! `StubPlayer` - a headless stub proving the control + shared-clock + highlight
 //! loop (decision 1 multi-thread + decision 2 single clock) WITHOUT real audio
 //! or a Slint window. The desktop sim drives it with fake `WordMark`s; the real
 //! Player (`kobo-audio`) and the real Slint sim reuse the same [`SharedClock`] +
 //! control pattern once a build env with cc/display is available.
 //!
 //! Proves: a Player on a worker task advances ONE shared clock; the UI's timer
-//! reads that clock and highlights the word whose `time_s` ≤ position; Play /
-//! Pause / Stop control it. Highlight and audio read one clock → can't drift.
+//! reads that clock and highlights the word whose `time_s` <= position; Play /
+//! Pause / Stop control it. Highlight and audio read one clock -> can't drift.
 
 use crate::clock::SharedClock;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
@@ -19,7 +19,7 @@ pub struct StubPlayer {
     playing: Arc<AtomicBool>,
     /// Accumulated playback position in ns (frozen on pause, reset on stop).
     base_ns: Arc<AtomicU64>,
-    /// Speed × 1000 (1.0 = 1000). The ticker scales elapsed time by this so
+    /// Speed x 1000 (1.0 = 1000). The ticker scales elapsed time by this so
     /// higher speed advances the clock (and thus highlight) faster.
     speed: Arc<AtomicU32>,
     task: Option<JoinHandle<()>>,
@@ -42,7 +42,7 @@ impl StubPlayer {
     }
 
     /// Spawn the clock-ticker task on the current tokio runtime (call once,
-    /// from within a runtime context — e.g. under `rt.enter()`). After this,
+    /// from within a runtime context - e.g. under `rt.enter()`). After this,
     /// [`play`]/[`pause`]/[`stop`] are plain atomic setters safe to call from
     /// any thread (including the Slint UI main thread).
     pub fn spawn_ticker(&mut self) {
@@ -102,7 +102,7 @@ impl StubPlayer {
         self.clock.set_ns(new_ns);
     }
 
-    /// Set playback speed (e.g. 0.5 … 2.0). The ticker scales elapsed time.
+    /// Set playback speed (e.g. 0.5 ... 2.0). The ticker scales elapsed time.
     pub fn set_speed(&self, speed: f64) {
         self.speed
             .store((speed * 1000.0).round() as u32, Ordering::Relaxed);
