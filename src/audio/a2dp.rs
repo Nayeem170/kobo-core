@@ -23,6 +23,9 @@ const CMD_START: u8 = 0x02;
 const CMD_STOP: u8 = 0x03;
 // ack values
 const ACK_SUCCESS: u8 = 0x00;
+// Max wait for btservice to respond (ctrl-socket ack) or drain (data-socket
+// write) before treating the BT stack as wedged (gap #5 / review #2).
+const BTSERVICE_TIMEOUT_SECS: u64 = 3;
 
 #[derive(Debug, Error)]
 pub enum A2dpError {
@@ -72,7 +75,12 @@ impl AospA2dpSink {
         let mut ack = [0u8; 1];
         // Distinguish timeout from a real read error (review #2): previously the
         // inner io::Result was dropped, so a read error left ack=[0x00] = false success.
-        match tokio::time::timeout(Duration::from_secs(3), self.ctrl.read_exact(&mut ack)).await {
+        match tokio::time::timeout(
+            Duration::from_secs(BTSERVICE_TIMEOUT_SECS),
+            self.ctrl.read_exact(&mut ack),
+        )
+        .await
+        {
             Ok(Ok(_)) => {}
             Ok(Err(e)) => return Err(A2dpError::Io(e)),
             Err(_) => {
@@ -111,17 +119,18 @@ impl AospA2dpSink {
     /// Blocks on a full buffer -> real-time pacing (gap #5).
     pub async fn write_pcm(&mut self, pcm: &[u8]) -> Result<(), A2dpError> {
         match self.data.as_mut() {
-            Some(d) => {
-                tokio::time::timeout(Duration::from_secs(3), d.write_all(pcm))
-                    .await
-                    .map_err(|_| {
-                        A2dpError::Io(std::io::Error::new(
-                            std::io::ErrorKind::TimedOut,
-                            "a2dp data write timeout (btservice not draining)",
-                        ))
-                    })?
-                    .map_err(A2dpError::Io)
-            }
+            Some(d) => tokio::time::timeout(
+                Duration::from_secs(BTSERVICE_TIMEOUT_SECS),
+                d.write_all(pcm),
+            )
+            .await
+            .map_err(|_| {
+                A2dpError::Io(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "a2dp data write timeout (btservice not draining)",
+                ))
+            })?
+            .map_err(A2dpError::Io),
             None => Err(A2dpError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotConnected,
                 "a2dp data socket not open (call start() first)",

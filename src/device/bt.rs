@@ -180,7 +180,10 @@ fn parse_managed_objects(text: &str) -> Vec<PairedDevice> {
         {
             if in_device_iface && is_paired {
                 if let Some(path) = current_path.take() {
-                    result.push(PairedDevice { path, connected: is_connected });
+                    result.push(PairedDevice {
+                        path,
+                        connected: is_connected,
+                    });
                 }
             }
             current_path = Some(p.to_string());
@@ -217,7 +220,10 @@ fn parse_managed_objects(text: &str) -> Vec<PairedDevice> {
     }
     if in_device_iface && is_paired {
         if let Some(path) = current_path.take() {
-            result.push(PairedDevice { path, connected: is_connected });
+            result.push(PairedDevice {
+                path,
+                connected: is_connected,
+            });
         }
     }
     result

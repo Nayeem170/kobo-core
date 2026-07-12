@@ -11,6 +11,8 @@ const BAR_HEIGHT: usize = 8;
 const BAR_FILL_COLOR: u16 = 0x06A4;
 const BAR_TRACK_COLOR: u16 = 0xD6BA;
 
+const SPINNER_ARC_COLOR: u16 = 0xF148;
+
 const SPINNER_OFFSET_FROM_BOTTOM: f32 = 130.0;
 const SPINNER_BADGE_R: f32 = 52.0;
 const SPINNER_ARC_R: f32 = 36.0;
@@ -62,12 +64,7 @@ pub fn paint_loading_bar(buf: &mut [u8], screen_w: usize, screen_h: usize, frac:
 pub fn loading_bar_rect(screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
     let bar_w = screen_w - 2 * BAR_SIDE_PAD as i32;
     let bar_y = screen_h - screen_h / 10;
-    (
-        BAR_SIDE_PAD as i32,
-        bar_y - 4,
-        bar_w,
-        BAR_HEIGHT as i32 + 8,
-    )
+    (BAR_SIDE_PAD as i32, bar_y - 4, bar_w, BAR_HEIGHT as i32 + 8)
 }
 
 /// Draw a rotating-arc spinner centred horizontally near the bottom.
@@ -104,7 +101,7 @@ pub fn paint_spinner(buf: &mut [u8], screen_w: usize, screen_h: usize, angle_deg
                     a >= start || a < end - 360.0
                 };
                 if in_arc {
-                    val = 0x0000;
+                    val = SPINNER_ARC_COLOR;
                 }
             }
             put_pixel(buf, screen_w, px, py, val);
@@ -118,4 +115,59 @@ pub fn spinner_rect(screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
     let cy = screen_h - SPINNER_OFFSET_FROM_BOTTOM as i32;
     let r = SPINNER_PAD;
     (cx - r, cy - r, r * 2, r * 2)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn put_pixel_writes_little_endian_at_offset() {
+        let mut buf = [0u8; 4];
+        put_pixel(&mut buf, 2, 1, 0, 0x1234);
+        // off = (0 * 2 + 1) * 2 = 2 -> little-endian u16
+        assert_eq!(buf, [0, 0, 0x34, 0x12]);
+    }
+
+    #[test]
+    fn put_pixel_ignores_out_of_bounds() {
+        let mut buf = [0u8; 4];
+        put_pixel(&mut buf, 2, 5, 0, 0xFFFF);
+        put_pixel(&mut buf, 2, 0, 5, 0xFFFF);
+        assert_eq!(buf, [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn loading_bar_rect_geometry() {
+        let (x, y, w, h) = loading_bar_rect(800, 600);
+        assert_eq!(x, BAR_SIDE_PAD as i32);
+        assert_eq!(w, 800 - 2 * BAR_SIDE_PAD as i32);
+        let bar_y = 600 - 600 / 10;
+        assert_eq!(y, bar_y - 4);
+        assert_eq!(h, BAR_HEIGHT as i32 + 8);
+    }
+
+    #[test]
+    fn spinner_rect_is_centred_square() {
+        let (x, y, w, h) = spinner_rect(800, 600);
+        let cx = 800 / 2;
+        let cy = 600 - SPINNER_OFFSET_FROM_BOTTOM as i32;
+        let r = SPINNER_PAD;
+        assert_eq!((x, y, w, h), (cx - r, cy - r, 2 * r, 2 * r));
+        assert_eq!(w, h);
+    }
+
+    #[test]
+    fn paint_loading_bar_fill_vs_track() {
+        let (w, h) = (800usize, 600usize);
+        let mut buf = vec![0u8; w * h * 2];
+        let bar_y = h - h / 10;
+        let off = (bar_y * w + BAR_SIDE_PAD) * 2;
+
+        paint_loading_bar(&mut buf, w, h, 0.0);
+        assert_eq!(&buf[off..off + 2], &BAR_TRACK_COLOR.to_le_bytes());
+
+        paint_loading_bar(&mut buf, w, h, 1.0);
+        assert_eq!(&buf[off..off + 2], &BAR_FILL_COLOR.to_le_bytes());
+    }
 }
