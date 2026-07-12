@@ -11,10 +11,13 @@ use log::{info, warn};
 const WLAN_IFACE: &str = "wlan0";
 const WLAN_OPERSTATE_PATH: &str = "/sys/class/net/wlan0/operstate";
 const WLAN_CARRIER_PATH: &str = "/sys/class/net/wlan0/carrier";
-const WPA_CONF_PATH: &str = "/etc/wpa_supplicant/wpa_supplicant.conf";
-// Daemons torn down on every toggle so a stale process can't hold the
-// interface across an on/off cycle (duplicated on the on and off paths).
-const WIFI_DAEMONS: &[&str] = &["wpa_supplicant", "dhcpcd", "udhcpc"];
+const WPA_CONF_PATHS: &[&str] = &[
+    "/etc/wpa_supplicant/wpa_supplicant.conf",
+    "/mnt/onboard/.kobo/wpa_supplicant.conf",
+    "/tmp/wpa_supplicant.conf",
+    "/var/run/wpa_supplicant/wlan0",
+];
+const WIFI_DAEMONS: &[&str] = &["dhcpcd", "udhcpc"];
 
 static LAST_WIFI_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
 
@@ -48,51 +51,59 @@ pub fn wifi_toggle(on: bool) {
     LAST_WIFI_TOGGLE_MS.store(now_ms(), Ordering::Relaxed);
     std::thread::spawn(move || {
         if on {
-            if let Err(e) = Command::new("killall")
-                .args(["-q"])
-                .args(WIFI_DAEMONS)
-                .status()
-            {
-                warn!("wifi: killall daemons failed: {e}");
-            }
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            let _ = fs::write("/sys/class/rfkill/rfkill0/soft", "0");
+            let _ = Command::new("rfkill").args(["unblock", "wifi"]).status();
 
             if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "up"]).status() {
                 warn!("wifi: ifconfig up failed: {e}");
             }
+            std::thread::sleep(std::time::Duration::from_millis(1000));
 
-            let conf = [WPA_CONF_PATH].iter().find_map(|p| {
-                if std::path::Path::new(p).exists() {
-                    Some(*p)
-                } else {
-                    None
-                }
-            });
+            let wpa_running = Command::new("pgrep")
+                .args(["-x", "wpa_supplicant"])
+                .output()
+                .map(|o| !o.stdout.is_empty())
+                .unwrap_or(false);
 
-            if let Some(conf) = conf {
-                if let Err(e) = Command::new("wpa_supplicant")
-                    .args(["-B", "-i", WLAN_IFACE, "-c", conf])
-                    .status()
-                {
-                    warn!("wifi: wpa_supplicant start failed: {e}");
-                }
-                info!("wifi: wpa_supplicant started with {conf}");
+            if wpa_running {
+                info!("wifi: wpa_supplicant already running, requesting reconnect");
             } else {
-                info!("wifi: no wpa_supplicant.conf found - connect from Kobo settings first");
+                let conf = WPA_CONF_PATHS
+                    .iter()
+                    .find(|p| std::path::Path::new(p).exists() && !p.ends_with("wlan0"));
+
+                if let Some(conf) = conf {
+                    if let Err(e) = Command::new("wpa_supplicant")
+                        .args(["-B", "-i", WLAN_IFACE, "-c", conf])
+                        .status()
+                    {
+                        warn!("wifi: wpa_supplicant start failed: {e}");
+                    }
+                    info!("wifi: wpa_supplicant started with {conf}");
+                } else {
+                    info!("wifi: no wpa_supplicant.conf found - connect from Kobo settings first");
+                }
             }
 
+            let _ = Command::new("wpa_cli")
+                .args(["-i", WLAN_IFACE, "reconnect"])
+                .status();
+
             if let Err(e) = Command::new("dhcpcd").args([WLAN_IFACE]).status() {
-                warn!("wifi: dhcpcd start failed: {e}");
+                let _ = Command::new("udhcpc")
+                    .args(["-i", WLAN_IFACE, "-q"])
+                    .status();
+                warn!("wifi: dhcpcd failed, tried udhcpc: {e}");
             }
             info!("wifi: turned ON");
         } else {
-            if let Err(e) = Command::new("killall")
+            let _ = Command::new("killall")
                 .args(["-q"])
                 .args(WIFI_DAEMONS)
-                .status()
-            {
-                warn!("wifi: killall daemons failed: {e}");
-            }
+                .status();
+            let _ = Command::new("wpa_cli")
+                .args(["-i", WLAN_IFACE, "disconnect"])
+                .status();
             if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "down"]).status() {
                 warn!("wifi: ifconfig down failed: {e}");
             }
