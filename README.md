@@ -53,7 +53,7 @@ All enabled by default. Disable what you don't need:
 
 ```toml
 # A music player: device + audio only
-kobo-core = { version = "0.1", default-features = false, features = ["device", "audio"] }
+kobo-core = { version = "0.2", default-features = false, features = ["device", "audio"] }
 ```
 
 ## Install
