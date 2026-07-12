@@ -75,6 +75,7 @@ println!("{} ({}dpi, {})", cfg.model, cfg.display_dpi, cfg.codename);
 use kobo_core::device::fb::Fb;
 use kobo_core::rendering::eink::WAVE_GC16;
 if let Some(fb) = Fb::open() {
+    let rgb565_bytes = vec![0u8; fb.xres * fb.yres * 2];
     fb.present(&rgb565_bytes, fb.xres, fb.yres, false, 0, fb.yres, WAVE_GC16);
 }
 
