@@ -20,6 +20,16 @@ const SPINNER_ARC_THICK: f32 = 9.0;
 const SPINNER_ARC_SPAN: u32 = 300;
 const SPINNER_PAD: i32 = 56;
 
+/// A screen rectangle (x, y, width, height) in pixels, for partial-refresh
+/// bounding regions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
 fn put_pixel(buf: &mut [u8], screen_w: usize, px: usize, py: usize, val: u16) {
     let off = (py * screen_w + px) * 2;
     if off + 2 > buf.len() {
@@ -57,14 +67,18 @@ pub fn paint_loading_bar(buf: &mut [u8], screen_w: usize, screen_h: usize, frac:
     }
 }
 
-/// Bounding rectangle of the loading bar for partial-refresh updates.
-///
-/// Returns `(x, y, width, height)` with a small margin so the refresh band
-/// covers the full bar including anti-aliasing edges.
-pub fn loading_bar_rect(screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
+/// Bounding rectangle of the loading bar for partial-refresh updates, with a
+/// small margin so the refresh band covers the full bar including
+/// anti-aliasing edges.
+pub fn loading_bar_rect(screen_w: i32, screen_h: i32) -> Rect {
     let bar_w = screen_w - 2 * BAR_SIDE_PAD as i32;
     let bar_y = screen_h - screen_h / 10;
-    (BAR_SIDE_PAD as i32, bar_y - 4, bar_w, BAR_HEIGHT as i32 + 8)
+    Rect {
+        x: BAR_SIDE_PAD as i32,
+        y: bar_y - 4,
+        w: bar_w,
+        h: BAR_HEIGHT as i32 + 8,
+    }
 }
 
 /// Draw a rotating-arc spinner centred horizontally near the bottom.
@@ -109,12 +123,17 @@ pub fn paint_spinner(buf: &mut [u8], screen_w: usize, screen_h: usize, angle_deg
     }
 }
 
-/// Bounding rectangle of the spinner: `(x, y, width, height)`.
-pub fn spinner_rect(screen_w: i32, screen_h: i32) -> (i32, i32, i32, i32) {
+/// Bounding rectangle of the spinner.
+pub fn spinner_rect(screen_w: i32, screen_h: i32) -> Rect {
     let cx = screen_w / 2;
     let cy = screen_h - SPINNER_OFFSET_FROM_BOTTOM as i32;
     let r = SPINNER_PAD;
-    (cx - r, cy - r, r * 2, r * 2)
+    Rect {
+        x: cx - r,
+        y: cy - r,
+        w: r * 2,
+        h: r * 2,
+    }
 }
 
 #[cfg(test)]
@@ -139,22 +158,30 @@ mod tests {
 
     #[test]
     fn loading_bar_rect_geometry() {
-        let (x, y, w, h) = loading_bar_rect(800, 600);
-        assert_eq!(x, BAR_SIDE_PAD as i32);
-        assert_eq!(w, 800 - 2 * BAR_SIDE_PAD as i32);
+        let r = loading_bar_rect(800, 600);
+        assert_eq!(r.x, BAR_SIDE_PAD as i32);
+        assert_eq!(r.w, 800 - 2 * BAR_SIDE_PAD as i32);
         let bar_y = 600 - 600 / 10;
-        assert_eq!(y, bar_y - 4);
-        assert_eq!(h, BAR_HEIGHT as i32 + 8);
+        assert_eq!(r.y, bar_y - 4);
+        assert_eq!(r.h, BAR_HEIGHT as i32 + 8);
     }
 
     #[test]
     fn spinner_rect_is_centred_square() {
-        let (x, y, w, h) = spinner_rect(800, 600);
+        let r = spinner_rect(800, 600);
         let cx = 800 / 2;
         let cy = 600 - SPINNER_OFFSET_FROM_BOTTOM as i32;
-        let r = SPINNER_PAD;
-        assert_eq!((x, y, w, h), (cx - r, cy - r, 2 * r, 2 * r));
-        assert_eq!(w, h);
+        let rad = SPINNER_PAD;
+        assert_eq!(
+            r,
+            Rect {
+                x: cx - rad,
+                y: cy - rad,
+                w: 2 * rad,
+                h: 2 * rad,
+            }
+        );
+        assert_eq!(r.w, r.h);
     }
 
     #[test]
