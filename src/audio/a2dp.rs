@@ -1,9 +1,9 @@
-//! `AospA2dpSink` — drives the Android `audio.a2dp.default` HAL on the Kobo.
+//! `AospA2dpSink` - drives the Android `audio.a2dp.default` HAL on the Kobo.
 //!
 //! Proven path (Spike A1): open the A2DP control Unix socket, send the AOSP
 //! `audio_a2dp_hw` commands (`CHECK_READY`/`START`/`STOP`), then write S16LE
 //! PCM to the data socket. `btservice` (separate from nickel) owns the sockets
-//! and serves the paired BT headset — no nickel needed at runtime (Spike A2).
+//! and serves the paired BT headset - no nickel needed at runtime (Spike A2).
 //!
 //! Gap #5 (backpressure/pacing): the data socket is written with `write_all`,
 //! which **blocks when the socket buffer is full**. Since the BT sink drains at
@@ -38,7 +38,7 @@ pub enum A2dpError {
 }
 
 /// The sample format the A1 proof validated on the Havit headset.
-/// (Edge-TTS PCM is 24 kHz mono → resampled to this by [`crate::pipeline`].)
+/// (Edge-TTS PCM is 24 kHz mono -> resampled to this by [`crate::pipeline`].)
 pub const TARGET_RATE: usize = 44_100;
 pub const TARGET_CHANNELS: usize = 2;
 
@@ -50,7 +50,7 @@ pub struct AospA2dpSink {
 
 impl AospA2dpSink {
     /// Open the control socket and verify the sink is ready.
-    /// (The data socket is NOT connected here — it only exists after `start()`.)
+    /// (The data socket is NOT connected here - it only exists after `start()`.)
     pub async fn open() -> Result<Self, A2dpError> {
         let ctrl = UnixStream::connect(CTRL_PATH)
             .await
@@ -108,10 +108,20 @@ impl AospA2dpSink {
     }
 
     /// Write PCM bytes (S16LE interleaved) to the A2DP data socket.
-    /// Blocks on a full buffer → real-time pacing (gap #5).
+    /// Blocks on a full buffer -> real-time pacing (gap #5).
     pub async fn write_pcm(&mut self, pcm: &[u8]) -> Result<(), A2dpError> {
         match self.data.as_mut() {
-            Some(d) => d.write_all(pcm).await.map_err(A2dpError::Io),
+            Some(d) => {
+                tokio::time::timeout(Duration::from_secs(3), d.write_all(pcm))
+                    .await
+                    .map_err(|_| {
+                        A2dpError::Io(std::io::Error::new(
+                            std::io::ErrorKind::TimedOut,
+                            "a2dp data write timeout (btservice not draining)",
+                        ))
+                    })?
+                    .map_err(A2dpError::Io)
+            }
             None => Err(A2dpError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotConnected,
                 "a2dp data socket not open (call start() first)",
@@ -120,7 +130,7 @@ impl AospA2dpSink {
     }
 
     /// Query the kernel socket send buffer for unsent bytes (TIOCOUTQ).
-    /// This gives the TRUE buffered amount — no wall-clock drift.
+    /// This gives the TRUE buffered amount - no wall-clock drift.
     /// Returns bytes not yet consumed by the A2DP HAL.
     pub fn unsent_bytes(&self) -> usize {
         use std::os::unix::io::AsRawFd;
