@@ -93,15 +93,16 @@ println!("Battery: {pct}%");
 
 | Model | Codename | SoC | Color | BT |
 |---|---|---|---|---|
-| Libra Colour | monza | MTK | Yes | Yes |
+| Libra Colour | monza / monzaKobo | MTK | Yes | Yes |
 | Clara Colour | spaColour | MTK | Yes | Yes |
-| Clara BW | spaBW | MTK | No | Yes |
+| Clara BW | spaBW / spaKoboBW | MTK | No | Yes |
 | Elipsa 2E | condor | MTK | No | Yes |
 | Sage | cadmus | sunxi | No | Yes |
 | Libra 2 | io | NXP | No | Yes |
 | Clara 2E | goldfinch | NXP | No | Yes |
 | Clara HD | nova | NXP | No | No |
 | Forma | frost | NXP | No | No |
+| Forma 32GB | storm | NXP | No | No |
 | Nia | luna | NXP | No | No |
 | Elipsa | elipsa | NXP | No | No |
 | Aura ONE | pika | NXP | No | No |

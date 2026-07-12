@@ -1,7 +1,8 @@
 //! E-ink framebuffer constants, MXCFB ioctl structs, and row-diff helper.
 //!
-//! The `Fb` struct (mmap + ioctl + `present()`) stays in the app crate - it
-//! needs the slint `Rgb565Pixel` type and runtime framebuffer access.
+//! The `Fb` struct (mmap + ioctl + `present()`) lives in
+//! [`crate::device::fb`]; it takes raw `&[u8]` RGB565 buffers, so it has no
+//! pixel-wrapper dependency.
 
 pub const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
 pub const FBIOGET_FSCREENINFO: libc::c_ulong = 0x4602;
