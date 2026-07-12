@@ -138,6 +138,7 @@ pub fn restore_frontlight(path: &Path, brightness: u32) {
 #[allow(dead_code)]
 pub fn kernel_suspend(state: &str) {
     debug!("pwr: entering kernel suspend ({})", state);
+    // best-effort: write may fail if the kernel rejects the requested state
     let _ = fs::write("/sys/power/state", state);
     debug!("pwr: resumed from kernel suspend");
 }

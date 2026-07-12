@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use log::{debug, info};
+use log::{debug, info, warn};
 
 use crate::device::config::SocFamily;
 
@@ -285,7 +285,7 @@ pub fn bt_toggle(on: bool) {
         // Powered call is fast and never hangs, and doing it on the caller's
         // thread means the adapter is already on before reconnect runs - which is
         // what made develop's single ON tap connect reliably.
-        let _ = dbus_cmd()
+        if let Err(e) = dbus_cmd()
             .args([
                 DBUS_DEVICE1_PATH,
                 DBUS_PROPS_SET,
@@ -293,7 +293,10 @@ pub fn bt_toggle(on: bool) {
                 "string:Powered",
                 "variant:boolean:true",
             ])
-            .status();
+            .status()
+        {
+            warn!("bt: adapter power-on failed: {e}");
+        }
         info!("bt: adapter powered on (bus={})", bt_bus());
         // Reconnect (Connect can retry for several seconds) off the main loop.
         let _ = std::thread::spawn(reconnect_bt);
@@ -305,15 +308,18 @@ pub fn bt_toggle(on: bool) {
         // to never freeze the UI on any device.
         std::thread::spawn(move || {
             if let Some(dev) = bt_target_device() {
-                let _ = dbus_cmd()
+                if let Err(e) = dbus_cmd()
                     .args([&dev, "org.bluez.Device1.Disconnect"])
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
-                    .status();
+                    .status()
+                {
+                    warn!("bt: disconnect {dev} failed: {e}");
+                }
                 debug!("bt: disconnecting {dev}");
             }
             clear_cached_bt_device();
-            let _ = dbus_cmd()
+            if let Err(e) = dbus_cmd()
                 .args([
                     DBUS_DEVICE1_PATH,
                     DBUS_PROPS_SET,
@@ -321,7 +327,10 @@ pub fn bt_toggle(on: bool) {
                     "string:Powered",
                     "variant:boolean:false",
                 ])
-                .status();
+                .status()
+            {
+                warn!("bt: adapter power-off failed: {e}");
+            }
             info!("bt: turned OFF (adapter powered down)");
         });
     }

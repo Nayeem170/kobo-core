@@ -27,7 +27,7 @@ pub fn lines(text: &str, max_chars: usize) -> Vec<Line> {
             if ch_len == 0 {
                 break;
             }
-            if text[i..].chars().next().unwrap().is_whitespace() {
+            if text[i..].chars().next().is_some_and(|c| c.is_whitespace()) {
                 i += ch_len;
             } else {
                 break;
@@ -35,7 +35,9 @@ pub fn lines(text: &str, max_chars: usize) -> Vec<Line> {
         }
         let word_start = i;
         while i < n {
-            let ch = text[i..].chars().next().unwrap();
+            let Some(ch) = text[i..].chars().next() else {
+                break;
+            };
             if ch.is_whitespace() {
                 break;
             }
