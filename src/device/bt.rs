@@ -5,7 +5,7 @@
 use std::fs;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use log::{debug, info};
@@ -65,13 +65,15 @@ pub fn bt_bus() -> &'static str {
 pub fn log_bt_diagnostics() {
     let cfg = fs::read_to_string(crate::device::paths::BT_CONFIG_FILE).unwrap_or_default();
     let cfg_dev = default_bt_device(&cfg);
-    let discovered = discover_paired_device();
+    let devices = discover_paired_devices();
     debug!(
-        "bt diag: bus={}, config_len={}, config_default={:?}, discovered={:?}, target={:?}",
+        "bt diag: bus={}, config_default={:?}, paired={:?}, target={:?}",
         bt_bus(),
-        cfg.len(),
         cfg_dev,
-        discovered,
+        devices
+            .iter()
+            .map(|d| format!("{}(connected={})", d.path, d.connected))
+            .collect::<Vec<_>>(),
         bt_target_device()
     );
 }
@@ -105,10 +107,24 @@ fn device_connected(dev: &str) -> bool {
 }
 
 pub fn bt_status() -> bool {
-    match bt_target_device() {
-        Some(d) => device_connected(&d),
-        None => false,
+    let dev = match bt_target_device() {
+        Some(d) => d,
+        None => return false,
+    };
+    if device_connected(&dev) {
+        return true;
     }
+    if let Some(connected) = discover_connected_paired_device() {
+        if connected != dev {
+            info!(
+                "bt: switching target {} -> {} (already connected by btservice)",
+                dev, connected
+            );
+            set_cached_bt_device(&connected);
+            return true;
+        }
+    }
+    false
 }
 
 pub fn default_bt_device(content: &str) -> Option<String> {
@@ -125,40 +141,57 @@ pub fn dbus_connected(text: &str) -> bool {
     text.contains("boolean true")
 }
 
-/// Cache of the BT device to talk to. Resolved once per session from the config
-/// (preferred) or by scanning the adapter for a paired device.
-static CACHED_BT_DEVICE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+struct PairedDevice {
+    path: String,
+    connected: bool,
+}
 
-/// Object paths of devices reporting Paired=true, discovered via the bluez
-/// ObjectManager (GetManagedObjects lists every object with all properties).
-/// This is more thorough than Adapter1.Devices, which the Kobo mtk.bluedroid
-/// wrapper does not populate — that's why the earlier discovery found nothing.
-fn discover_paired_devices() -> Vec<String> {
-    let out = match dbus_cmd().args(["/", DBUS_OBJECT_MANAGER]).output() {
-        Ok(o) => o,
-        Err(_) => return Vec::new(),
-    };
-    let text = String::from_utf8_lossy(&out.stdout);
-    let mut all_paths: usize = 0;
-    let mut device_ifaces: usize = 0;
-    let mut paired: Vec<String> = Vec::new();
+static CACHED_BT_DEVICE: Mutex<Option<String>> = Mutex::new(None);
+
+fn get_cached_bt_device() -> Option<String> {
+    CACHED_BT_DEVICE.lock().ok().and_then(|g| g.clone())
+}
+
+fn set_cached_bt_device(dev: &str) {
+    if let Ok(mut guard) = CACHED_BT_DEVICE.lock() {
+        *guard = Some(dev.to_string());
+    }
+}
+
+fn clear_cached_bt_device() {
+    if let Ok(mut guard) = CACHED_BT_DEVICE.lock() {
+        *guard = None;
+    }
+}
+
+fn parse_managed_objects(text: &str) -> Vec<PairedDevice> {
+    let mut result: Vec<PairedDevice> = Vec::new();
     let mut current_path: Option<String> = None;
     let mut in_device_iface = false;
+    let mut is_paired = false;
+    let mut is_connected = false;
     let mut expect_paired_val = false;
+    let mut expect_connected_val = false;
     for line in text.lines() {
         let t = line.trim();
         if let Some(p) = t
             .strip_prefix("object path \"")
             .and_then(|s| s.strip_suffix('"'))
         {
-            all_paths += 1;
+            if in_device_iface && is_paired {
+                if let Some(path) = current_path.take() {
+                    result.push(PairedDevice { path, connected: is_connected });
+                }
+            }
             current_path = Some(p.to_string());
             in_device_iface = false;
+            is_paired = false;
+            is_connected = false;
             expect_paired_val = false;
+            expect_connected_val = false;
             continue;
         }
         if t == "string \"org.bluez.Device1\"" {
-            device_ifaces += 1;
             in_device_iface = true;
             continue;
         }
@@ -166,38 +199,74 @@ fn discover_paired_devices() -> Vec<String> {
             expect_paired_val = true;
             continue;
         }
+        if t == "string \"Connected\"" {
+            expect_connected_val = true;
+            continue;
+        }
         if expect_paired_val {
             expect_paired_val = false;
             if t.contains("boolean true") && in_device_iface {
-                if let Some(p) = current_path.clone() {
-                    paired.push(p);
-                }
+                is_paired = true;
+            }
+        } else if expect_connected_val {
+            expect_connected_val = false;
+            if t.contains("boolean true") && in_device_iface {
+                is_connected = true;
             }
         }
     }
-    debug!(
-        "bt discover: GetManagedObjects objects={} device_ifaces={} paired={:?}",
-        all_paths, device_ifaces, paired
-    );
-    paired
-}
-
-/// First paired device on the adapter, if any.
-fn discover_paired_device() -> Option<String> {
-    discover_paired_devices().into_iter().next()
-}
-
-/// The BT device to connect/query: the configured default if present, otherwise
-/// the first paired device found on the adapter. Cached for the session.
-pub fn bt_target_device() -> Option<String> {
-    if let Some(d) = CACHED_BT_DEVICE.get() {
-        return Some(d.clone());
+    if in_device_iface && is_paired {
+        if let Some(path) = current_path.take() {
+            result.push(PairedDevice { path, connected: is_connected });
+        }
     }
-    let found = fs::read_to_string(crate::device::paths::BT_CONFIG_FILE)
-        .ok()
-        .and_then(|c| default_bt_device(&c))
-        .or_else(discover_paired_device)?;
-    let _ = CACHED_BT_DEVICE.set(found.clone());
+    result
+}
+
+fn discover_paired_devices() -> Vec<PairedDevice> {
+    let out = match dbus_cmd().args(["/", DBUS_OBJECT_MANAGER]).output() {
+        Ok(o) => o,
+        Err(_) => return Vec::new(),
+    };
+    let text = String::from_utf8_lossy(&out.stdout);
+    let result = parse_managed_objects(&text);
+    debug!(
+        "bt discover: paired={:?}",
+        result
+            .iter()
+            .map(|d| format!("{}(connected={})", d.path, d.connected))
+            .collect::<Vec<_>>()
+    );
+    result
+}
+
+fn discover_connected_paired_device() -> Option<String> {
+    discover_paired_devices()
+        .into_iter()
+        .find(|d| d.connected)
+        .map(|d| d.path)
+}
+
+/// The BT device to connect/query: a device already connected by btservice
+/// (preferred), then the configured default, then the first paired device.
+/// Cached for the session; the cache is cleared on BT power-off so the next
+/// power-on re-resolves with live connected state.
+pub fn bt_target_device() -> Option<String> {
+    if let Some(d) = get_cached_bt_device() {
+        return Some(d);
+    }
+    let devices = discover_paired_devices();
+    let found = devices
+        .iter()
+        .find(|d| d.connected)
+        .map(|d| d.path.clone())
+        .or_else(|| {
+            fs::read_to_string(crate::device::paths::BT_CONFIG_FILE)
+                .ok()
+                .and_then(|c| default_bt_device(&c))
+        })
+        .or_else(|| devices.first().map(|d| d.path.clone()))?;
+    set_cached_bt_device(&found);
     Some(found)
 }
 
@@ -208,7 +277,7 @@ pub fn bt_toggle(on: bool) {
     if on {
         // Power the adapter up SYNCHRONOUSLY (matches develop exactly). The Set
         // Powered call is fast and never hangs, and doing it on the caller's
-        // thread means the adapter is already on before reconnect runs — which is
+        // thread means the adapter is already on before reconnect runs - which is
         // what made develop's single ON tap connect reliably.
         let _ = dbus_cmd()
             .args([
@@ -226,19 +295,18 @@ pub fn bt_toggle(on: bool) {
     } else {
         // Power-down path: a Device1.Disconnect can block indefinitely when the
         // configured speaker isn't actually linked, and callers (sleep entry,
-        // panel toggle) run on the main loop — so run the whole thing off-thread
+        // panel toggle) run on the main loop - so run the whole thing off-thread
         // to never freeze the UI on any device.
         std::thread::spawn(move || {
-            if let Ok(content) = fs::read_to_string(crate::device::paths::BT_CONFIG_FILE) {
-                if let Some(dev) = default_bt_device(&content) {
-                    let _ = dbus_cmd()
-                        .args([&dev, "org.bluez.Device1.Disconnect"])
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .status();
-                    debug!("bt: disconnecting {dev}");
-                }
+            if let Some(dev) = bt_target_device() {
+                let _ = dbus_cmd()
+                    .args([&dev, "org.bluez.Device1.Disconnect"])
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                debug!("bt: disconnecting {dev}");
             }
+            clear_cached_bt_device();
             let _ = dbus_cmd()
                 .args([
                     DBUS_DEVICE1_PATH,
@@ -291,14 +359,10 @@ pub fn reconnect_bt() {
 }
 
 pub fn bt_name() -> Option<String> {
-    // Use the resolved target device (config default or discovered paired
-    // device), not the often-empty config, then read its friendly name (Alias)
-    // straight from the BT stack. Gated on actual connection so the panel never
-    // advertises a paired-but-disconnected device as "connected".
-    let dev = bt_target_device()?;
-    if !device_connected(&dev) {
+    if !bt_status() {
         return None;
     }
+    let dev = bt_target_device()?;
     let out = dbus_cmd()
         .args([&dev, DBUS_PROPS_GET, DBUS_DEVICE1_IFACE, "string:Alias"])
         .output()
@@ -359,5 +423,72 @@ mod tests {
     fn parse_dbus_string_none_when_empty_or_absent() {
         assert_eq!(parse_dbus_string("string \"\"\n"), None);
         assert_eq!(parse_dbus_string("no string field"), None);
+    }
+
+    #[test]
+    fn parse_managed_objects_finds_paired_with_connected() {
+        let dbus_output = "\
+object path \"/org/bluez/hci0\"\n\
+   dict entry(\n\
+      string \"org.bluez.Adapter1\"\n\
+      dict entry(\n\
+         string \"Powered\"\n\
+         variant          boolean true\n\
+      )\n\
+   )\n\
+object path \"/org/bluez/hci0/dev_11_22_33_44_55_66\"\n\
+   dict entry(\n\
+      string \"org.bluez.Device1\"\n\
+      dict entry(\n\
+         string \"Paired\"\n\
+         variant          boolean true\n\
+      )\n\
+      dict entry(\n\
+         string \"Connected\"\n\
+         variant          boolean true\n\
+      )\n\
+   )\n\
+object path \"/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF\"\n\
+   dict entry(\n\
+      string \"org.bluez.Device1\"\n\
+      dict entry(\n\
+         string \"Paired\"\n\
+         variant          boolean true\n\
+      )\n\
+      dict entry(\n\
+         string \"Connected\"\n\
+         variant          boolean false\n\
+      )\n\
+   )\n";
+        let devices = parse_managed_objects(dbus_output);
+        assert_eq!(devices.len(), 2);
+        assert_eq!(devices[0].path, "/org/bluez/hci0/dev_11_22_33_44_55_66");
+        assert!(devices[0].connected);
+        assert_eq!(devices[1].path, "/org/bluez/hci0/dev_AA_BB_CC_DD_EE_FF");
+        assert!(!devices[1].connected);
+    }
+
+    #[test]
+    fn parse_managed_objects_skips_unpaired() {
+        let dbus_output = "\
+object path \"/org/bluez/hci0/dev_FF_EE_DD_CC_BB_AA\"\n\
+   dict entry(\n\
+      string \"org.bluez.Device1\"\n\
+      dict entry(\n\
+         string \"Paired\"\n\
+         variant          boolean false\n\
+      )\n\
+      dict entry(\n\
+         string \"Connected\"\n\
+         variant          boolean true\n\
+      )\n\
+   )\n";
+        let devices = parse_managed_objects(dbus_output);
+        assert!(devices.is_empty());
+    }
+
+    #[test]
+    fn parse_managed_objects_empty_input() {
+        assert!(parse_managed_objects("").is_empty());
     }
 }
