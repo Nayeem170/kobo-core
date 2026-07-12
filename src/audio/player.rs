@@ -1,9 +1,9 @@
-//! `Player` — the streaming Read Aloud audio spine (review #1 + #3).
+//! `Player` - the streaming Read Aloud audio spine (review #1 + #3).
 //!
 //! - **Bounded / per-utterance (#3):** the caller splits text into utterances
 //!   and calls [`Player::play_utterance`] for each. Each utterance's MP3 is
 //!   decoded/resampled/written in isolation (bounded RAM, not whole-chapter),
-//!   and `write_all` blocks on the A2DP socket's full buffer → real-time pacing.
+//!   and `write_all` blocks on the A2DP socket's full buffer -> real-time pacing.
 //! - **Drain before STOP (#1):** [`Player::drain_and_stop`] waits for the sink's
 //!   buffered audio to finish playing before issuing STOP, so a chapter's last
 //!   sentence isn't truncated (the spike's bug).
@@ -20,7 +20,7 @@ const EDGE_TICKS_PER_SECOND: f64 = 10_000_000.0;
 const BYTES_PER_STEREO_FRAME: u64 = 4;
 
 /// Safety pad added to the drain wait to cover A2DP startup + headset-buffer
-/// latency (≥100–300 ms) that the wall-clock estimate ignores (review #1-residual).
+/// latency (>=100-300 ms) that the wall-clock estimate ignores (review #1-residual).
 /// Until the sink exposes a TX-queue-empty poll (SIOCOUTQ), this prevents the
 /// BT-pipeline tail from clipping on longer/slower content.
 const DRAIN_SAFETY_PAD: f64 = 0.5;
@@ -34,10 +34,10 @@ pub struct WordMark {
     pub text: String,
 }
 
-/// A decoded, resampled, stereo-ized utterance ready to write to the sink — the
+/// A decoded, resampled, stereo-ized utterance ready to write to the sink - the
 /// pure-CPU output of [`Player::prepare`] (no I/O). The paced-write driver owns
 /// one of these and feeds it to the sink in small chunks, so a Pause aborts the
-/// write with only a tiny lead buffered (≈[`LEAD_FRAMES`] worth), instead of the
+/// write with only a tiny lead buffered (~[`LEAD_FRAMES`] worth), instead of the
 /// whole-utterance burst that `play_utterance` issues.
 #[derive(Debug, Clone, Default)]
 pub struct Prepared {
@@ -48,20 +48,20 @@ pub struct Prepared {
 }
 
 /// Chunk size for paced writes: ~50 ms of stereo frames @ [`TARGET_RATE`].
-/// (50 ms × 44 100 = 2205 frames.) Tunable on device.
+/// (50 ms x 44 100 = 2205 frames.) Tunable on device.
 pub const CHUNK_FRAMES: usize = 2_205;
 /// Write-ahead lead to keep in the sink: ~200 ms of stereo frames. The paced
-/// loop stops feeding once `frames_written − playback ≥ LEAD_FRAMES`, so a Pause
-/// leaves at most this much buffered → pause latency ≈ 200 ms (vs the 5–10 s
+/// loop stops feeding once `frames_written - playback >= LEAD_FRAMES`, so a Pause
+/// leaves at most this much buffered -> pause latency ~ 200 ms (vs the 5-10 s
 /// burst buffer). Start here; raise if the device underruns (garble), lower if
 /// pause feels sluggish.
 pub const LEAD_FRAMES: u64 = 8_820;
 /// Silence lead-in written right after START: ~500 ms. The A2DP HAL clips/
 /// distorts the first audio after START (codec + link ramp-up), so we feed
-/// silence first — the artifact consumes silence, not the first spoken word.
+/// silence first - the artifact consumes silence, not the first spoken word.
 /// NOTE: on-device capture confirmed our sent data is clean (pure silence +
 /// clean speech at ~657 ms); a residual startup noise remains that is
-/// downstream of our pipeline (HAL/headset amp ramp) — not fixable from here
+/// downstream of our pipeline (HAL/headset amp ramp) - not fixable from here
 /// beyond this lead-in. Tunable.
 pub const LEAD_IN_FRAMES: usize = TARGET_RATE / 2;
 
@@ -108,7 +108,7 @@ impl Player {
     }
 
     /// Pure-CPU prep for the paced-write path: collect MP3 + word bounds, then
-    /// decode → resample 24k→44.1k → mono→stereo. No I/O — the driver controls
+    /// decode -> resample 24k->44.1k -> mono->stereo. No I/O - the driver controls
     /// the actual writes (so it can poll for Pause/Stop between chunks).
     pub fn prepare(events: &[TtsEvent]) -> Result<Prepared, PlayerError> {
         let mut mp3: Vec<u8> = Vec::new();
@@ -133,7 +133,7 @@ impl Player {
     }
 
     /// Playback-clock start (absolute seconds since the first sample) for the
-    /// NEXT utterance's [`WordMark`]s — = frames already queued / rate. Capture
+    /// NEXT utterance's [`WordMark`]s - = frames already queued / rate. Capture
     /// this before writing an utterance, then pass to [`Player::marks`].
     pub fn next_utt_start_s(&self) -> f64 {
         self.frames_written as f64 / TARGET_RATE as f64
@@ -172,9 +172,9 @@ impl Player {
 
     /// Trickle one chunk (~50 ms) of silence to the A2DP data socket while idle
     /// (paused/stopped), to keep the link warm so the paired headset doesn't
-    /// drop it — the idle drop is what wedges `btservice` into `ctrl-ack-timeout`
+    /// drop it - the idle drop is what wedges `btservice` into `ctrl-ack-timeout`
     /// (findings A5). Transparent to the pacing/resume model: does NOT touch
-    /// `frames_written` or the playback clock. Data-socket only → no START/STOP,
+    /// `frames_written` or the playback clock. Data-socket only -> no START/STOP,
     /// so no churn fatigue (unlike A4).
     pub async fn keepalive(&mut self) -> Result<(), PlayerError> {
         self.silence_buf.fill(0);
@@ -191,7 +191,7 @@ impl Player {
         self.clock_base + span
     }
 
-    /// Stereo frames written but (per the clock) not yet played — the write-ahead
+    /// Stereo frames written but (per the clock) not yet played - the write-ahead
     /// lead the paced loop caps at [`LEAD_FRAMES`].
     pub fn lead_frames(&self) -> u64 {
         self.frames_written.saturating_sub(self.playback_frames())
@@ -199,10 +199,10 @@ impl Player {
 
     /// ACTUAL stereo frames buffered in the kernel socket (via TIOCOUTQ).
     /// Unlike lead_frames() (wall-clock estimate), this is a direct measurement
-    /// — no drift. Use for pacing to avoid both underrun (fot-fot) and
+    /// - no drift. Use for pacing to avoid both underrun (fot-fot) and
     /// unbounded buffer (E8: pause latency + resume overlap).
     pub fn socket_buffered_frames(&self) -> u64 {
-        self.sink.unsent_bytes() as u64 / 4 // 2 bytes/sample × 2 channels
+        self.sink.unsent_bytes() as u64 / 4 // 2 bytes/sample x 2 channels
     }
 
     /// Total stereo frames pushed into the sink since open (2 i16 per frame).
@@ -211,7 +211,7 @@ impl Player {
         self.frames_written
     }
 
-    /// Start (or resume) the playback clock. Idempotent — only sets the anchor if
+    /// Start (or resume) the playback clock. Idempotent - only sets the anchor if
     /// the clock is currently frozen. Call when (re)entering playback so the lead
     /// can drain even before the next write.
     pub fn resume_clock(&mut self) {
@@ -231,11 +231,11 @@ impl Player {
         self.paused_since.map(|t| t.elapsed())
     }
 
-    /// Play one utterance's events (decode → resample 24k→44.1k → mono→stereo →
+    /// Play one utterance's events (decode -> resample 24k->44.1k -> mono->stereo ->
     /// write to the sink, paced by backpressure). Bounded to one utterance.
     ///
     /// Returns the utterance's [`WordMark`]s tagged with **absolute playback
-    /// time** (review: surface WordBoundary — the data highlight depends on),
+    /// time** (review: surface WordBoundary - the data highlight depends on),
     /// mapped as: `time_s = utterance_playback_start + edge_offset_seconds`,
     /// where the edge offset is in 100-ns ticks (resampling preserves time).
     pub async fn play_utterance(

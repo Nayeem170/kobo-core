@@ -124,7 +124,7 @@ impl Fb {
         waveform: u32,
     ) {
         // SAFETY: self.ptr is the mmap'd framebuffer of length self.map_len (set in open(),
-        // unmapped in Drop). We hold &self (shared) but only write fb pixels here — no other
+        // unmapped in Drop). We hold &self (shared) but only write fb pixels here - no other
         // aliasing byte slice of this mapping is live concurrently. The slice length is exactly
         // map_len, matching the mapping.
         let fb = unsafe { std::slice::from_raw_parts_mut(self.ptr, self.map_len) };
@@ -166,7 +166,7 @@ impl Fb {
         let sync_len = ((y1 - y0) * self.stride).max(1);
         // SAFETY: self.ptr.add(sync_start) stays within [self.ptr, self.ptr+map_len) because
         // sync_start = y0*stride and sync_len = (y1-y0)*stride, with y0/y1 clamped to yres and
-        // stride*xres*... ≤ map_len for a linear framebuffer. MS_SYNC flushes the dirty pages.
+        // stride*xres*... <= map_len for a linear framebuffer. MS_SYNC flushes the dirty pages.
         unsafe {
             libc::msync(
                 self.ptr.add(sync_start) as *mut libc::c_void,

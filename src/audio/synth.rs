@@ -1,7 +1,7 @@
 //! High-level TTS synthesis orchestration: retry/backoff, turn-end validation,
 //! PCM-shortness ground-truth check, and inter-sentence gap baking.
 
-use crate::audio::{EdgeTts, Engine, Player, Prepared, TtsEvent, TARGET_RATE, SENTENCE_GAP_FRAMES};
+use crate::audio::{EdgeTts, Engine, Player, Prepared, TtsEvent, SENTENCE_GAP_FRAMES, TARGET_RATE};
 use log::{debug, info};
 use std::time::Duration;
 
@@ -25,7 +25,10 @@ pub async fn synthesize_prepared(
     for attempt in 0..MAX_ATTEMPTS {
         if attempt > 0 {
             tokio::time::sleep(Duration::from_millis(BACKOFF_MS[attempt as usize])).await;
-            info!("synth #{utt_idx}: retry {attempt}/{MAX_ATTEMPTS} ({})", last_err.as_deref().unwrap_or("?"));
+            info!(
+                "synth #{utt_idx}: retry {attempt}/{MAX_ATTEMPTS} ({})",
+                last_err.as_deref().unwrap_or("?")
+            );
         }
 
         let net_t0 = std::time::Instant::now();

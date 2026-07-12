@@ -1,4 +1,4 @@
-//! Capability detection (plan §5): drives the read-aloud vs plain-reader state
+//! Capability detection (plan S5): drives the read-aloud vs plain-reader state
 //! machine. `MockCapabilities` is for the desktop simulator; the real impl
 //! (`KoboCapabilities`) lives in the `kobo` backend crate (checks network reach
 //! + A2DP sink presence).

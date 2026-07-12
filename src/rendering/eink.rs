@@ -1,7 +1,8 @@
 //! E-ink framebuffer constants, MXCFB ioctl structs, and row-diff helper.
 //!
-//! The `Fb` struct (mmap + ioctl + `present()`) stays in the app crate — it
-//! needs the slint `Rgb565Pixel` type and runtime framebuffer access.
+//! The `Fb` struct (mmap + ioctl + `present()`) lives in
+//! [`crate::device::fb`]; it takes raw `&[u8]` RGB565 buffers, so it has no
+//! pixel-wrapper dependency.
 
 pub const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
 pub const FBIOGET_FSCREENINFO: libc::c_ulong = 0x4602;
@@ -93,7 +94,7 @@ pub enum RenderScenario {
 ///
 /// `prev` and `cur` are raw byte views of `w * h` RGB565 pixels (2 bytes each,
 /// stride = `w * 2`). The caller is responsible for providing matching-length
-/// slices — typically via a `rgb565_as_bytes` helper on the pixel type.
+/// slices - typically via a `rgb565_as_bytes` helper on the pixel type.
 pub fn diff_rows(prev: &[u8], cur: &[u8], w: usize, h: usize) -> Option<(usize, usize)> {
     let mut min_y = h;
     let mut max_y = 0;

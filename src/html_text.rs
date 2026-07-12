@@ -1,4 +1,4 @@
-//! Chapter XHTML → plain text + a **char-offset→element map**.
+//! Chapter XHTML -> plain text + a **char-offset->element map**.
 //!
 //! This is the basis for highlight: a `WordMark`'s word (from Edge-TTS) is a
 //! substring of the synthesized utterance, which is a slice of the chapter

@@ -26,7 +26,7 @@ impl log::Log for FileLogger {
             .append(true)
             .open(KLOG)
         {
-            // best-effort: a failed log write has no recourse — cannot log a logging failure
+            // best-effort: a failed log write has no recourse - cannot log a logging failure
             let _ = writeln!(f, "{} {:<5} {}", ts, record.level(), args);
             if record.level() <= log::Level::Info {
                 // best-effort: sync failure means the log line may not survive a crash reboot

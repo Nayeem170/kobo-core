@@ -1,12 +1,12 @@
-//! Audio pipeline: MP3 decode → resample → mono→stereo.
+//! Audio pipeline: MP3 decode -> resample -> mono->stereo.
 //!
-//! Edge-TTS `audio-24khz-48kbitrate-mono-mp3` → A1's proven **44100 Hz stereo S16LE**.
+//! Edge-TTS `audio-24khz-48kbitrate-mono-mp3` -> A1's proven **44100 Hz stereo S16LE**.
 
 const IN_RATE: usize = 24_000; // Edge-TTS PCM
 const OUT_RATE: usize = 44_100; // A1-proven target
 
-/// Decode MP3 bytes (Edge-TTS `audio-24khz-48kbitrate-mono-mp3`) → mono S16LE
-/// samples via symphonia (pure Rust). The PCM `riff-…` format is rejected by
+/// Decode MP3 bytes (Edge-TTS `audio-24khz-48kbitrate-mono-mp3`) -> mono S16LE
+/// samples via symphonia (pure Rust). The PCM `riff-...` format is rejected by
 /// the current endpoint, so MP3+decode is used (PCM remains a documented
 /// follow-up optimization).
 pub fn decode_mp3(mp3: &[u8]) -> Result<Vec<i16>, String> {
@@ -54,7 +54,7 @@ pub fn decode_mp3(mp3: &[u8]) -> Result<Vec<i16>, String> {
     Ok(samples)
 }
 
-/// Gap #4: resample mono S16LE from 24 kHz → 44.1 kHz (non-integer) via rubato.
+/// Gap #4: resample mono S16LE from 24 kHz -> 44.1 kHz (non-integer) via rubato.
 ///
 /// This is provably lossless across the whole utterance:
 /// - A chunk of **leading silence** is prepended so the filter's group-delay
@@ -112,7 +112,7 @@ pub fn resample_mono(pcm: &[i16]) -> Result<Vec<i16>, String> {
         .collect())
 }
 
-/// Gap #2: mono S16LE → stereo S16LE by duplicating the channel.
+/// Gap #2: mono S16LE -> stereo S16LE by duplicating the channel.
 pub fn mono_to_stereo(mono: &[i16]) -> Vec<i16> {
     let mut out = Vec::with_capacity(mono.len() * 2);
     for &s in mono {
@@ -145,7 +145,7 @@ mod tests {
 
     #[test]
     fn resample_mono_grows_by_out_in_ratio() {
-        // 2 s of mono @ 24 kHz. The output must grow ~OUT_RATE/IN_RATE (1.8375×)
+        // 2 s of mono @ 24 kHz. The output must grow ~OUT_RATE/IN_RATE (1.8375x)
         // to 44.1 kHz; the lead-silence + delay-trim are small relative to 2 s,
         // so the result lands in a tight band around 88 200 samples.
         let input: Vec<i16> = (0..48_000).map(|i| (i as i32 & 0xff) as i16).collect();

@@ -1,11 +1,11 @@
-//! `SharedClock` — the single playback time source (decision 2).
+//! `SharedClock` - the single playback time source (decision 2).
 //!
 //! Both the Player (worker thread) and the UI (main thread) read the SAME
 //! clock, so highlight and audio physically can't drift. The Player writes
 //! position; the UI's ~15 Hz timer reads [`SharedClock::position_s`] and
-//! highlights the `WordMark` whose `time_s` ≤ position.
+//! highlights the `WordMark` whose `time_s` <= position.
 //!
-//! Cross-thread via a relaxed `AtomicU64` (nanoseconds) — cheap and
+//! Cross-thread via a relaxed `AtomicU64` (nanoseconds) - cheap and
 //! single-producer (Player) / single-consumer (UI timer).
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
@@ -34,7 +34,7 @@ impl SharedClock {
     }
 }
 
-/// Pick the index of the last `WordMark` whose `time_s` is ≤ `position_s`
+/// Pick the index of the last `WordMark` whose `time_s` is <= `position_s`
 /// (the currently-highlighted word). Returns None before the first word.
 pub fn highlight_index(word_times: &[f64], position_s: f64) -> Option<usize> {
     // word_times assumed ascending; find the last index with time_s <= position.

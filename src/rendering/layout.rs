@@ -58,14 +58,14 @@ fn word_wrap_word_based(text: &str, max_w: usize, px: f32) -> Vec<html_text::Lin
     let mut i = 0usize;
     while i < n {
         while i < n && text[i..].chars().next().is_some_and(|c| c.is_whitespace()) {
-            i += text[i..].chars().next().unwrap().len_utf8();
+            i += text[i..].chars().next().map_or(0, |c| c.len_utf8());
         }
         if i >= n {
             break;
         }
         let word_start = i;
         while i < n && !text[i..].chars().next().is_some_and(|c| c.is_whitespace()) {
-            i += text[i..].chars().next().unwrap().len_utf8();
+            i += text[i..].chars().next().map_or(0, |c| c.len_utf8());
         }
         let word = &text[word_start..i];
         let ww = text_render::word_width(word, px);
@@ -83,7 +83,9 @@ fn word_wrap_word_based(text: &str, max_w: usize, px: f32) -> Vec<html_text::Lin
         if ww > max_wf && line_text.is_empty() {
             let mut ci = 0usize;
             while ci < word.len() {
-                let ch = word[ci..].chars().next().unwrap();
+                let Some(ch) = word[ci..].chars().next() else {
+                    break;
+                };
                 let ch_w = text_render::word_width(&ch.to_string(), px);
                 if line_w + ch_w > max_wf && !line_text.is_empty() {
                     out.push(html_text::Line {

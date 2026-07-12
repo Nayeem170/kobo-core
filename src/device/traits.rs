@@ -3,12 +3,12 @@
 //! Each device subsystem gets a narrow trait so that consumer apps can inject
 //! Mock impls for desktop unit tests instead of hitting real sysfs/ioctl.
 //!
-//! - [`Frontlight`] — brightness get/set/restore
-//! - [`Battery`] — capacity percentage
-//! - [`Wifi`] — link status, SSID, toggle
-//! - [`Bluetooth`] — connection status, name, toggle
-//! - [`SystemControl`] — suspend, wall-clock
-//! - [`Framebuffer`] — resolution, present
+//! - [`Frontlight`] - brightness get/set/restore
+//! - [`Battery`] - capacity percentage
+//! - [`Wifi`] - link status, SSID, toggle
+//! - [`Bluetooth`] - connection status, name, toggle
+//! - [`SystemControl`] - suspend, wall-clock
+//! - [`Framebuffer`] - resolution, present
 //!
 //! Sys impls (production wrappers around the free functions) live in
 //! [`crate::device::impls`].
