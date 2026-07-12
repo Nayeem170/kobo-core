@@ -15,7 +15,6 @@ const WPA_CONF_PATHS: &[&str] = &[
     "/etc/wpa_supplicant/wpa_supplicant.conf",
     "/mnt/onboard/.kobo/wpa_supplicant.conf",
     "/tmp/wpa_supplicant.conf",
-    "/var/run/wpa_supplicant/wlan0",
 ];
 const WIFI_DAEMONS: &[&str] = &["dhcpcd", "udhcpc"];
 
@@ -70,7 +69,7 @@ pub fn wifi_toggle(on: bool) {
             } else {
                 let conf = WPA_CONF_PATHS
                     .iter()
-                    .find(|p| std::path::Path::new(p).exists() && !p.ends_with("wlan0"));
+                    .find(|p| std::path::Path::new(p).exists());
 
                 if let Some(conf) = conf {
                     if let Err(e) = Command::new("wpa_supplicant")
@@ -90,17 +89,12 @@ pub fn wifi_toggle(on: bool) {
                 .status();
 
             if let Err(e) = Command::new("dhcpcd").args([WLAN_IFACE]).status() {
-                let _ = Command::new("udhcpc")
-                    .args(["-i", WLAN_IFACE, "-q"])
-                    .status();
+                let _ = Command::new("udhcpc").args(["-i", WLAN_IFACE, "-q"]).status();
                 warn!("wifi: dhcpcd failed, tried udhcpc: {e}");
             }
             info!("wifi: turned ON");
         } else {
-            let _ = Command::new("killall")
-                .args(["-q"])
-                .args(WIFI_DAEMONS)
-                .status();
+            let _ = Command::new("killall").args(["-q"]).args(WIFI_DAEMONS).status();
             let _ = Command::new("wpa_cli")
                 .args(["-i", WLAN_IFACE, "disconnect"])
                 .status();
