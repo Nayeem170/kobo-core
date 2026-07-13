@@ -8,7 +8,7 @@ use std::time::Duration;
 const TICKS_PER_SECOND: f64 = 10_000_000.0;
 const STEREO_CHANNELS: f64 = 2.0;
 const MIN_DETECTABLE_SPEECH_S: f64 = 0.5;
-const PCM_SHORT_TOLERANCE: f64 = 0.98;
+const PCM_SHORT_TOLERANCE: f64 = 1.0;
 const MAX_ATTEMPTS: u32 = 3;
 const BACKOFF_MS: [u64; 3] = [0, 250, 600];
 const SYNTH_TIMEOUT_SECS: u64 = 10;

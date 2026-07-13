@@ -55,7 +55,7 @@ pub const CHUNK_FRAMES: usize = 2_205;
 /// leaves at most this much buffered -> pause latency ~ 200 ms (vs the 5-10 s
 /// burst buffer). Start here; raise if the device underruns (garble), lower if
 /// pause feels sluggish.
-pub const LEAD_FRAMES: u64 = 8_820;
+pub const LEAD_FRAMES: u64 = 17_640;
 /// Silence lead-in written right after START: ~500 ms. The A2DP HAL clips/
 /// distorts the first audio after START (codec + link ramp-up), so we feed
 /// silence first - the artifact consumes silence, not the first spoken word.
