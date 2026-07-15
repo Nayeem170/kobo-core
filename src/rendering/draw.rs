@@ -119,7 +119,7 @@ pub fn paint_progress_bar(
                 continue;
             }
             let filled = (rx as f32 / w as f32) < frac;
-            let v = if filled { 0x1084 } else { 0xC639 };
+            let v = if filled { 0x1082 } else { 0xD6BA };
             buf_bytes[off] = (v & 0xff) as u8;
             buf_bytes[off + 1] = (v >> 8) as u8;
         }
@@ -140,7 +140,7 @@ pub fn measure_text(text: &str, px: f32) -> usize {
     total as usize
 }
 
-pub const ACTION_BTN_FILL: u16 = 0x0953;
+pub const ACTION_BTN_FILL: u16 = 0x0349;
 pub const ACTION_BTN_FG: u16 = 0xFFFF;
 pub const ACTION_BTN_RADIUS: usize = 10;
 
@@ -207,7 +207,7 @@ pub fn paint_nav_bar(
             if off + 2 > buf_bytes.len() {
                 break;
             }
-            let v = if is_edge { 0x1084 } else { 0xFFFF };
+            let v = if is_edge { 0x1082 } else { 0xFFFF };
             buf_bytes[off] = (v & 0xff) as u8;
             buf_bytes[off + 1] = (v >> 8) as u8;
         }

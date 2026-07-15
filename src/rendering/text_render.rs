@@ -83,6 +83,12 @@ pub struct DecodedImage {
     pub height: usize,
 }
 
+pub struct DecodedRgba {
+    pub rgba: Vec<u8>,
+    pub width: usize,
+    pub height: usize,
+}
+
 pub fn decode_image(raw: &[u8], max_w: usize, max_h: usize) -> Option<DecodedImage> {
     let img = image::load_from_memory(raw).ok()?;
     let (ow, oh) = (img.width() as usize, img.height() as usize);
@@ -113,6 +119,36 @@ pub fn decode_image(raw: &[u8], max_w: usize, max_h: usize) -> Option<DecodedIma
     })
 }
 
+pub fn decode_image_rgba(raw: &[u8], max_w: usize, max_h: usize) -> Option<DecodedRgba> {
+    let img = image::load_from_memory(raw).ok()?;
+    let (ow, oh) = (img.width() as usize, img.height() as usize);
+    if ow == 0 || oh == 0 {
+        return None;
+    }
+    let scale = max_w as f32 / ow as f32;
+    let mut nw = max_w;
+    let mut nh = (oh as f32 * scale).round() as usize;
+    if nh == 0 {
+        return None;
+    }
+    if nh > max_h {
+        let hscale = max_h as f32 / nh as f32;
+        nh = max_h;
+        nw = (nw as f32 * hscale).round() as usize;
+        if nw == 0 {
+            return None;
+        }
+    }
+    let resized = img.resize(nw as u32, nh as u32, image::imageops::FilterType::Triangle);
+    let rgba = resized.to_rgba8();
+    let (rw, rh) = (rgba.width() as usize, rgba.height() as usize);
+    Some(DecodedRgba {
+        rgba: rgba.into_raw(),
+        width: rw,
+        height: rh,
+    })
+}
+
 pub fn blit_rgb565_image(
     buf: &mut [u8],
     buf_stride: usize,
@@ -138,6 +174,49 @@ pub fn blit_rgb565_image(
             let r = rgb[idx] as u16;
             let g = rgb[idx + 1] as u16;
             let b = rgb[idx + 2] as u16;
+            let r5 = (r >> 3) & 0x1f;
+            let g6 = (g >> 2) & 0x3f;
+            let b5 = (b >> 3) & 0x1f;
+            let v = (r5 << 11) | (g6 << 5) | b5;
+            let off = (py * buf_stride + px) * 2;
+            if off + 2 > buf.len() {
+                continue;
+            }
+            buf[off] = (v & 0xff) as u8;
+            buf[off + 1] = (v >> 8) as u8;
+        }
+    }
+}
+
+pub fn blit_rgb565_image_alpha(
+    buf: &mut [u8],
+    buf_stride: usize,
+    rgba: &[u8],
+    iw: usize,
+    ih: usize,
+    ox: usize,
+    oy: usize,
+    max_w: usize,
+    max_h: usize,
+) {
+    for ry in 0..ih {
+        let py = oy + ry;
+        if py >= max_h {
+            break;
+        }
+        for rx in 0..iw {
+            let px = ox + rx;
+            if px >= max_w {
+                break;
+            }
+            let idx = (ry * iw + rx) * 4;
+            let a = rgba[idx + 3];
+            if a == 0 {
+                continue;
+            }
+            let r = rgba[idx] as u16;
+            let g = rgba[idx + 1] as u16;
+            let b = rgba[idx + 2] as u16;
             let r5 = (r >> 3) & 0x1f;
             let g6 = (g >> 2) & 0x3f;
             let b5 = (b >> 3) & 0x1f;

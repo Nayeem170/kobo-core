@@ -40,8 +40,8 @@ fn pixel_at(buf: &[u8], x: usize, y: usize) -> u16 {
     (buf[off] as u16) | ((buf[off + 1] as u16) << 8)
 }
 
-const PROGRESS_FILLED: u16 = 0x1084;
-const PROGRESS_BG: u16 = 0xC639;
+const PROGRESS_FILLED: u16 = 0x1082;
+const PROGRESS_BG: u16 = 0xD6BA;
 
 #[test]
 fn progress_bar_half_filled_splits_at_midpoint() {

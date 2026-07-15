@@ -9,6 +9,7 @@ const TICKS_PER_SECOND: f64 = 10_000_000.0;
 const STEREO_CHANNELS: f64 = 2.0;
 const MIN_DETECTABLE_SPEECH_S: f64 = 0.5;
 const PCM_SHORT_TOLERANCE: f64 = 1.0;
+const PCM_SHORT_EPSILON_S: f64 = 0.05;
 const MAX_ATTEMPTS: u32 = 3;
 const BACKOFF_MS: [u64; 3] = [0, 250, 600];
 const SYNTH_TIMEOUT_SECS: u64 = 10;
@@ -78,7 +79,7 @@ pub async fn synthesize_prepared(
             .unwrap_or(0.0);
         let actual_s = prep.stereo.len() as f64 / (TARGET_RATE as f64 * STEREO_CHANNELS);
         if expected_speech_s > MIN_DETECTABLE_SPEECH_S
-            && actual_s < expected_speech_s * PCM_SHORT_TOLERANCE
+            && actual_s < expected_speech_s * PCM_SHORT_TOLERANCE - PCM_SHORT_EPSILON_S
         {
             last_err = Some(format!(
                 "synth: short PCM {:.2}s vs {:.2}s expected (dropped audio frames)",

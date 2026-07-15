@@ -12,6 +12,9 @@ use crate::rendering::eink::{
 };
 use log::{debug, info, warn};
 
+const UPDATE_MARKER: u32 = 1;
+const WAIT_FALLBACK_MS: u64 = 400;
+
 pub fn dump_ppm(path: &str, buf: &[u8], w: usize, h: usize) {
     let mut out = Vec::with_capacity(15 + w * h * 3);
     out.extend_from_slice(format!("P6\n{} {}\n255\n", w, h).as_bytes());
@@ -183,7 +186,7 @@ impl Fb {
             },
             waveform_mode: waveform,
             update_mode: if full { 1 } else { 0 },
-            update_marker: 1,
+            update_marker: UPDATE_MARKER,
             temp: 0x1000,
             flags: 0,
         };
@@ -200,6 +203,22 @@ impl Fb {
             y1 - y0,
             rc
         );
+    }
+
+    pub fn wait_for_update_complete(&self) {
+        let marker: u32 = UPDATE_MARKER;
+        // SAFETY: self.fd is the valid fb0 descriptor opened in Fb::open; marker is a stack u32
+        // passed by const ptr, read-once by the ioctl to match the update_marker from present().
+        let rc = unsafe {
+            libc::ioctl(
+                self.fd,
+                crate::rendering::eink::MXCFB_WAIT_FOR_UPDATE_COMPLETE as _,
+                &marker as *const u32,
+            )
+        };
+        if rc < 0 {
+            std::thread::sleep(std::time::Duration::from_millis(WAIT_FALLBACK_MS));
+        }
     }
 }
 
