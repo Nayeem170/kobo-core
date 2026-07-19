@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Device trait surface for testability.
 //!
 //! Each device subsystem gets a narrow trait so that consumer apps can inject
@@ -123,9 +125,7 @@ impl Wifi for MockWifi {
     fn ssid(&self) -> Option<String> {
         self.ssid.clone()
     }
-    fn toggle(&self, on: bool) {
-        let _ = on;
-    }
+    fn toggle(&self, _on: bool) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -151,9 +151,7 @@ impl Bluetooth for MockBluetooth {
     fn name(&self) -> Option<String> {
         self.name.clone()
     }
-    fn toggle(&self, on: bool) {
-        let _ = on;
-    }
+    fn toggle(&self, _on: bool) {}
 }
 
 // ---------------------------------------------------------------------------

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! E-ink framebuffer constants, MXCFB ioctl structs, and row-diff helper.
 //!
 //! The `Fb` struct (mmap + ioctl + `present()`) lives in
@@ -7,6 +9,7 @@
 pub const FBIOGET_VSCREENINFO: libc::c_ulong = 0x4600;
 pub const FBIOGET_FSCREENINFO: libc::c_ulong = 0x4602;
 pub const MXCFB_SEND_UPDATE: libc::c_ulong = 0x4024462E;
+pub const MXCFB_WAIT_FOR_UPDATE_COMPLETE: libc::c_ulong = 0x4004462F;
 
 #[repr(C)]
 #[derive(Default)]

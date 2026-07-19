@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Bluetooth paired-device discovery: parse the bluez ObjectManager dump,
 //! cache the active target device, and resolve which device to talk to.
 
@@ -8,9 +10,9 @@ use log::debug;
 
 use super::{dbus_cmd, default_bt_device, DBUS_OBJECT_MANAGER};
 
-pub(super) struct PairedDevice {
-    pub(super) path: String,
-    pub(super) connected: bool,
+pub struct PairedDevice {
+    pub path: String,
+    pub connected: bool,
 }
 
 static CACHED_BT_DEVICE: Mutex<Option<String>> = Mutex::new(None);
@@ -96,7 +98,7 @@ fn parse_managed_objects(text: &str) -> Vec<PairedDevice> {
     result
 }
 
-pub(super) fn discover_paired_devices() -> Vec<PairedDevice> {
+pub fn discover_paired_devices() -> Vec<PairedDevice> {
     let out = match dbus_cmd().args(["/", DBUS_OBJECT_MANAGER]).output() {
         Ok(o) => o,
         Err(_) => return Vec::new(),

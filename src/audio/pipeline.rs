@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Audio pipeline: MP3 decode -> resample -> mono->stereo.
 //!
 //! Edge-TTS `audio-24khz-48kbitrate-mono-mp3` -> A1's proven **44100 Hz stereo S16LE**.

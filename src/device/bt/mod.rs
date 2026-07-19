@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Bluetooth: adapter power, A2DP device connect/disconnect, paired-device
 //! discovery, and the friendly name read-out for the panel pill. All bluez /
 //! mtk.bluedroid DBus interaction lives here.
@@ -15,6 +17,7 @@ use crate::device::config::SocFamily;
 mod discover;
 
 pub use discover::bt_target_device;
+pub use discover::PairedDevice;
 use discover::{
     clear_cached_bt_device, discover_connected_paired_device, discover_paired_devices,
     set_cached_bt_device,
@@ -59,6 +62,7 @@ pub fn set_bt_bus(soc: SocFamily) {
         SocFamily::Mtk => BT_BUS_MTK,
         SocFamily::Nxp | SocFamily::Sunxi => BT_BUS_BLUEZ,
     };
+    // best-effort: OnceLock::set only fails if already set (first call wins)
     let _ = BT_BUS.set(bus);
     info!("bt: bus = {} ({:?})", bus, soc);
 }
@@ -176,6 +180,7 @@ pub fn bt_toggle(on: bool) {
         }
         info!("bt: adapter powered on (bus={})", bt_bus());
         // Reconnect (Connect can retry for several seconds) off the main loop.
+        // best-effort: the handle is dropped so the thread runs detached
         let _ = std::thread::spawn(reconnect_bt);
         info!("bt: turned ON + reconnecting");
     } else {
@@ -276,6 +281,86 @@ pub fn parse_dbus_string(text: &str) -> Option<String> {
     let end = rest.find('"')?;
     let name = &rest[..end];
     (!name.is_empty()).then(|| name.to_string())
+}
+
+pub struct BtDeviceInfo {
+    pub path: String,
+    pub name: String,
+    pub connected: bool,
+}
+
+fn device_alias(dev: &str) -> Option<String> {
+    let out = dbus_cmd()
+        .args([dev, DBUS_PROPS_GET, DBUS_DEVICE1_IFACE, "string:Alias"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    parse_dbus_string(&text).or_else(|| {
+        let out2 = dbus_cmd()
+            .args([dev, DBUS_PROPS_GET, DBUS_DEVICE1_IFACE, "string:Name"])
+            .output()
+            .ok()?;
+        parse_dbus_string(&String::from_utf8_lossy(&out2.stdout))
+    })
+}
+
+pub fn bt_list_devices() -> Vec<BtDeviceInfo> {
+    let paired = discover_paired_devices();
+    paired
+        .into_iter()
+        .map(|d| {
+            let name = device_alias(&d.path).unwrap_or_else(|| {
+                d.path
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("Unknown")
+                    .replace('_', ":")
+            });
+            BtDeviceInfo {
+                name,
+                connected: d.connected,
+                path: d.path,
+            }
+        })
+        .collect()
+}
+
+pub fn bt_connect_device(path: &str) {
+    info!("bt: switching to device {path}");
+    if let Some(current) = bt_target_device() {
+        if current != path {
+            // best-effort: a failed disconnect doesn't block the connect that follows
+            let _ = dbus_cmd()
+                .args([&current, DBUS_DEVICE1_DISCONNECT])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            debug!("bt: disconnected {current}");
+        }
+    }
+    set_cached_bt_device(path);
+    let path = path.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        for attempt in 1..=4 {
+            let rc = dbus_cmd()
+                .args([&path, DBUS_DEVICE1_CONNECT])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+            let connected = device_connected(&path);
+            debug!(
+                "bt_connect_device: attempt {attempt} rc={:?} connected={}",
+                rc.as_ref().ok().and_then(|s| s.code()),
+                connected
+            );
+            if connected {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+        }
+        info!("bt_connect_device: gave up after 4 attempts ({path})");
+    });
 }
 
 #[cfg(test)]

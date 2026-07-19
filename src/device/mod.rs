@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Device module: hardware database, device I/O, and rendering primitives.
 //!
 //! - [`config`] - `DeviceConfig`, `SocFamily`, `TouchProtocol`, device lookup

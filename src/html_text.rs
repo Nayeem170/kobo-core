@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Chapter XHTML -> plain text + a **char-offset->element map**.
 //!
 //! This is the basis for highlight: a `WordMark`'s word (from Edge-TTS) is a
@@ -16,7 +18,11 @@
 #[cfg(feature = "reader")]
 pub mod extract;
 pub mod lines;
+#[cfg(feature = "reader")]
+pub mod style;
 
 #[cfg(feature = "reader")]
-pub use extract::{extract, segment_at, TextSegment};
+pub use extract::{extract, extract_with_indents, segment_at, StyleRun, TextSegment};
 pub use lines::{lines, sentence_index_at, Line};
+#[cfg(feature = "reader")]
+pub use style::{parse_indents, IndentMap};

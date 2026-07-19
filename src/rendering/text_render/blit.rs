@@ -1,7 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 use rustybuzz::UnicodeBuffer;
 
 use super::detect_script;
-use super::fonts::{fallback_for_char, font_for_script, glyph_cache};
+use super::fonts::{fallback_for_char, font_for, glyph_cache, TextStyle};
 
 pub fn blit_rgb565(
     buf: &mut [u8],
@@ -16,6 +18,24 @@ pub fn blit_rgb565(
     blit_rgb565_color(buf, buf_stride, text, px_size, ox, oy, 0x0000, max_w, max_h);
 }
 
+/// Emphasis is synthesised from the regular face (see [`TextStyle`]).
+///
+/// Bold smears each glyph's coverage horizontally, italic shears it about the
+/// baseline. Both act on the rasterised bitmap rather than the outline, which
+/// means they compose with every script and with the glyph cache: the cache is
+/// keyed on the unstyled glyph, so a bold run reuses the same rasterisation as
+/// plain text.
+///
+/// Neither changes the pen advance. That is what keeps emphasis from reflowing
+/// a paragraph -- the same reason `word_width_styled` ignores them.
+const OBLIQUE_SHEAR: f32 = 0.21; // ~12 degrees
+
+/// Horizontal smear for synthetic bold, in px. Scaled with type size so it
+/// reads as the same weight at any font setting, and never less than 1.
+fn bold_smear(px_size: f32) -> usize {
+    ((px_size / 22.0).round() as usize).max(1)
+}
+
 pub fn blit_rgb565_color(
     buf: &mut [u8],
     buf_stride: usize,
@@ -27,11 +47,40 @@ pub fn blit_rgb565_color(
     max_w: usize,
     max_h: usize,
 ) {
+    blit_rgb565_styled(
+        buf,
+        buf_stride,
+        text,
+        px_size,
+        ox,
+        oy,
+        color,
+        TextStyle::PLAIN,
+        max_w,
+        max_h,
+    );
+}
+
+/// As [`blit_rgb565_color`], but sets the run in `style`.
+#[allow(clippy::too_many_arguments)]
+pub fn blit_rgb565_styled(
+    buf: &mut [u8],
+    buf_stride: usize,
+    text: &str,
+    px_size: f32,
+    ox: usize,
+    oy: usize,
+    color: u16,
+    style: TextStyle,
+    max_w: usize,
+    max_h: usize,
+) {
     let cr = ((color >> 11) & 0x1f) as u32;
     let cg = ((color >> 5) & 0x3f) as u32;
     let cb = (color & 0x1f) as u32;
     let script = detect_script(text);
-    let fd = font_for_script(script);
+    let fd = font_for(script, style);
+    let smear = if style.bold { bold_smear(px_size) } else { 0 };
     let scale = px_size / fd.face.units_per_em() as f32;
     let lm = fd.body.horizontal_line_metrics(px_size);
     let baseline = match lm {
@@ -74,6 +123,7 @@ pub fn blit_rgb565_color(
             cache.get(&key).cloned().unwrap_or_else(|| {
                 drop(cache);
                 let entry = rfont.body.rasterize_indexed(rgid, px_size);
+                // best-effort: a poisoned/contended cache lock just skips caching
                 let _ = gc.lock().map(|mut c| {
                     c.insert(key, entry.clone());
                 });
@@ -92,12 +142,29 @@ pub fn blit_rgb565_color(
                 - metrics.ymin
                 - gh as i32;
             for ry in 0..gh {
-                for rx in 0..gw {
-                    let cov = bitmap[ry * gw + rx] as u32;
+                // Shear about the baseline so the glyph leans without drifting
+                // off the line: rows above the baseline move right, descenders
+                // move left, and the baseline itself does not move.
+                let shear_dx = if style.italic {
+                    let above_baseline = (gh as i32 - ry as i32) + metrics.ymin;
+                    (above_baseline as f32 * OBLIQUE_SHEAR).round() as i32
+                } else {
+                    0
+                };
+                for rx in 0..gw + smear {
+                    // Synthetic bold: a pixel is inked if any of the `smear`
+                    // columns to its left were, which thickens every stem by the
+                    // same amount regardless of direction.
+                    let lo = rx.saturating_sub(smear);
+                    let hi = rx.min(gw - 1);
+                    let cov = (lo..=hi)
+                        .map(|sx| bitmap[ry * gw + sx] as u32)
+                        .max()
+                        .unwrap_or(0);
                     if cov == 0 {
                         continue;
                     }
-                    let px = gx0 + rx as i32;
+                    let px = gx0 + rx as i32 + shear_dx;
                     let py = gy0 + ry as i32;
                     if px < 0 || (px as usize) >= max_w || py < 0 || (py as usize) >= max_h {
                         continue;

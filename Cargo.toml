@@ -1,7 +1,8 @@
 [package]
 name = "kobo-core"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
+authors = ["Nayeem Bin Ahsan"]
 description = "Kobo e-reader device SDK: device database, sysfs/ioctl, rendering, audio pipeline, trait surface"
 license = "MIT"
 readme = "README.md"
@@ -15,13 +16,16 @@ default = ["device", "rendering", "audio", "reader"]
 device = []
 rendering = []
 audio = []
-reader = ["dep:epub", "dep:scraper", "dep:thiserror"]
+reader = ["dep:epub", "dep:scraper", "dep:ego-tree", "dep:thiserror"]
 
 [dependencies]
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 epub = { version = "2", optional = true }
 scraper = { version = "0.20", optional = true }
+# Already in the tree via scraper; declared directly because scraper 0.20 does
+# not re-export it and the DOM walk in html_text::extract names NodeRef.
+ego-tree = { version = "0.6", optional = true }
 thiserror = { version = "1", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp"] }
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "sync", "net", "io-util"] }

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! `Player` - the streaming Read Aloud audio spine (review #1 + #3).
 //!
 //! - **Bounded / per-utterance (#3):** the caller splits text into utterances
@@ -47,6 +49,23 @@ pub struct Prepared {
     pub bounds: Vec<(u64, String)>,
 }
 
+impl Prepared {
+    /// Playback tick (100-ns units from utterance start) at which the given
+    /// character offset within the utterance text is reached. Walks the word
+    /// boundaries accumulating `word.len() + 1` chars per word. Returns the last
+    /// word's tick when `text_offset` exceeds the utterance length.
+    pub fn tick_at_offset(&self, text_offset: usize) -> Option<u64> {
+        let mut acc = 0usize;
+        for (ticks, word) in &self.bounds {
+            if acc >= text_offset {
+                return Some(*ticks);
+            }
+            acc += word.len() + 1;
+        }
+        self.bounds.last().map(|(t, _)| *t)
+    }
+}
+
 /// Chunk size for paced writes: ~50 ms of stereo frames @ [`TARGET_RATE`].
 /// (50 ms x 44 100 = 2205 frames.) Tunable on device.
 pub const CHUNK_FRAMES: usize = 2_205;
@@ -55,7 +74,7 @@ pub const CHUNK_FRAMES: usize = 2_205;
 /// leaves at most this much buffered -> pause latency ~ 200 ms (vs the 5-10 s
 /// burst buffer). Start here; raise if the device underruns (garble), lower if
 /// pause feels sluggish.
-pub const LEAD_FRAMES: u64 = 8_820;
+pub const LEAD_FRAMES: u64 = 17_640;
 /// Silence lead-in written right after START: ~500 ms. The A2DP HAL clips/
 /// distorts the first audio after START (codec + link ramp-up), so we feed
 /// silence first - the artifact consumes silence, not the first spoken word.

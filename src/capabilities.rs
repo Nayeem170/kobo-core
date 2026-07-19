@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Capability detection (plan S5): drives the read-aloud vs plain-reader state
 //! machine. `MockCapabilities` is for the desktop simulator; the real impl
 //! (`KoboCapabilities`) lives in the `kobo` backend crate (checks network reach

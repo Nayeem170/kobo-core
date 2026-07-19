@@ -1,24 +1,50 @@
-//! WiFi: link status (operstate + carrier), on/off toggle (wpa_supplicant +
-//! dhcpcd), and the connected SSID read-out for the panel pill.
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
+mod power;
+mod scan;
+mod wpa;
+
+pub use scan::{wifi_list_networks, wifi_name, wifi_saved_ssids, wifi_select_network, WifiNetwork};
+pub use wpa::init_wpa_detection;
+
+#[cfg(test)]
+use scan::{parse_conf_ssids, parse_ssid, parse_wpa_networks};
 
 use std::fs;
-use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use log::{info, warn};
-
-const WLAN_IFACE: &str = "wlan0";
-const WLAN_OPERSTATE_PATH: &str = "/sys/class/net/wlan0/operstate";
-const WLAN_CARRIER_PATH: &str = "/sys/class/net/wlan0/carrier";
-const WPA_CONF_PATHS: &[&str] = &[
+pub(super) const WLAN_IFACE: &str = "wlan0";
+pub(super) const WLAN_OPERSTATE_PATH: &str = "/sys/class/net/wlan0/operstate";
+pub(super) const WLAN_CARRIER_PATH: &str = "/sys/class/net/wlan0/carrier";
+pub(super) const WPA_CONF_PATHS: &[&str] = &[
     "/etc/wpa_supplicant/wpa_supplicant.conf",
-    "/mnt/onboard/.kobo/wpa_supplicant.conf",
+    crate::device::paths::WPA_CONF_KOBO,
     "/tmp/wpa_supplicant.conf",
     "/etc/wpa_supplicant-wlan0.conf",
     "/data/misc/wifi/wpa_supplicant.conf",
 ];
-const WIFI_DAEMONS: &[&str] = &["dhcpcd", "udhcpc"];
+pub(super) const WIFI_DAEMONS: &[&str] = &["dhcpcd", "udhcpc"];
+pub(super) const WMT_DBG_PATH: &str = "/proc/driver/wmt_dbg";
+pub(super) const WMT_WIFI_DEV: &str = "/dev/wmtWifi";
+pub(super) const WMT_UNLOCK_TOKEN: &str = "0xDB9DB9";
+pub(super) const WMT_FUNC_OFF: &str = "7 9 0";
+pub(super) const WMT_FUNC_ON: &str = "7 9 1";
+pub(super) const WMT_WIFI_POWER_ON: &str = "1";
+pub(super) const WMT_SETTLE_MS: u64 = 1000;
+pub(super) const RFKILL_SOFT_PATH: &str = "/sys/class/rfkill/rfkill0/soft";
+pub(super) const IFACE_UP_SETTLE_MS: u64 = 1000;
+pub(super) const CARRIER_POLL_MS: u64 = 500;
+pub(super) const CARRIER_POLL_MAX: usize = 30;
+pub(super) const WPA_DRV_NL80211: &str = "nl80211";
+pub(super) const WPA_DRV_WEXT: &str = "wext";
+pub(super) const WPA_CTRL_DEFAULT: &str = "/var/run/wpa_supplicant";
+pub(super) const WPA_SUPPLICANT_CANDIDATES: &[&str] = &[
+    "wpa_supplicant",
+    "/usr/sbin/wpa_supplicant",
+    "/system/bin/wpa_supplicant",
+    "/sbin/wpa_supplicant",
+];
 
 static LAST_WIFI_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
 
@@ -52,154 +78,11 @@ pub fn wifi_toggle(on: bool) {
     LAST_WIFI_TOGGLE_MS.store(now_ms(), Ordering::Relaxed);
     std::thread::spawn(move || {
         if on {
-            wifi_turn_on();
+            power::wifi_turn_on();
         } else {
-            wifi_turn_off();
+            power::wifi_turn_off();
         }
     });
-}
-
-fn find_wpa_conf() -> Option<String> {
-    for p in WPA_CONF_PATHS {
-        if std::path::Path::new(p).exists() {
-            info!("wifi: config found at {p}");
-            return Some((*p).to_string());
-        }
-    }
-    info!("wifi: config not at known paths, searching filesystem...");
-    for dir in &["/etc", "/mnt/onboard/.kobo", "/var", "/data"] {
-        if let Ok(out) = Command::new("find")
-            .args([dir, "-name", "wpa_supplicant*.conf", "-type", "f"])
-            .output()
-        {
-            let found = String::from_utf8_lossy(&out.stdout);
-            for line in found.lines() {
-                let path = line.trim();
-                if !path.is_empty() && std::path::Path::new(path).exists() {
-                    info!("wifi: config found via search: {path}");
-                    return Some(path.to_string());
-                }
-            }
-        }
-    }
-    None
-}
-
-fn wifi_turn_on() {
-    let _ = fs::write("/sys/class/rfkill/rfkill0/soft", "0");
-    let _ = Command::new("rfkill").args(["unblock", "wifi"]).status();
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "up"]).status() {
-        warn!("wifi: ifconfig up failed: {e}");
-    }
-    std::thread::sleep(std::time::Duration::from_millis(1000));
-
-    let wpa_running = Command::new("pgrep")
-        .args(["-x", "wpa_supplicant"])
-        .output()
-        .map(|o| !o.stdout.is_empty())
-        .unwrap_or(false);
-
-    if wpa_running {
-        info!("wifi: wpa_supplicant already running, reconfiguring");
-        let _ = Command::new("wpa_cli")
-            .args(["-i", WLAN_IFACE, "reconfigure"])
-            .status();
-    } else {
-        let conf = find_wpa_conf();
-        match conf {
-            Some(ref conf_path) => {
-                match Command::new("wpa_supplicant")
-                    .args(["-B", "-i", WLAN_IFACE, "-c", conf_path])
-                    .output()
-                {
-                    Ok(out) if out.status.success() => {
-                        info!("wifi: wpa_supplicant started with {conf_path}");
-                    }
-                    Ok(out) => {
-                        let stderr = String::from_utf8_lossy(&out.stderr);
-                        warn!("wifi: wpa_supplicant failed: {}", stderr.trim());
-                    }
-                    Err(e) => {
-                        warn!("wifi: wpa_supplicant binary not found: {e}");
-                    }
-                }
-            }
-            None => {
-                warn!("wifi: no wpa_supplicant.conf found anywhere on device");
-            }
-        }
-    }
-
-    let _ = Command::new("wpa_cli")
-        .args(["-i", WLAN_IFACE, "reconnect"])
-        .status();
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    let mut got_carrier = false;
-    for i in 0..30 {
-        let carrier = fs::read_to_string(WLAN_CARRIER_PATH).unwrap_or_default();
-        if carrier.trim() == "1" {
-            info!("wifi: carrier acquired after {} poll(s)", i + 1);
-            got_carrier = true;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(500));
-    }
-    if !got_carrier {
-        warn!("wifi: no carrier after 15s");
-        if let Ok(out) = Command::new("wpa_cli")
-            .args(["-i", WLAN_IFACE, "status"])
-            .output()
-        {
-            let status = String::from_utf8_lossy(&out.stdout);
-            warn!("wifi: wpa status: {}", status.trim());
-        }
-    }
-
-    if got_carrier {
-        if let Err(e) = Command::new("dhcpcd").args([WLAN_IFACE]).status() {
-            let _ = Command::new("udhcpc").args(["-i", WLAN_IFACE, "-q"]).status();
-            warn!("wifi: dhcpcd failed, tried udhcpc: {e}");
-        }
-    }
-    info!("wifi: turned ON (carrier={got_carrier})");
-}
-
-fn wifi_turn_off() {
-    let _ = Command::new("killall").args(["-q"]).args(WIFI_DAEMONS).status();
-    let _ = Command::new("wpa_cli")
-        .args(["-i", WLAN_IFACE, "disconnect"])
-        .status();
-    if let Err(e) = Command::new("ifconfig").args([WLAN_IFACE, "down"]).status() {
-        warn!("wifi: ifconfig down failed: {e}");
-    }
-    info!("wifi: turned OFF");
-}
-
-pub fn wifi_name() -> Option<String> {
-    let out = Command::new("iwconfig").args([WLAN_IFACE]).output().ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    parse_ssid(&text)
-}
-
-pub fn parse_ssid(text: &str) -> Option<String> {
-    for line in text.lines() {
-        if let Some(idx) = line.find("ESSID:") {
-            let rest = &line[idx + 6..];
-            if let Some(start) = rest.find('"') {
-                let after = &rest[start + 1..];
-                if let Some(end) = after.find('"') {
-                    let ssid = &after[..end];
-                    if !ssid.is_empty() {
-                        return Some(ssid.to_string());
-                    }
-                }
-            }
-        }
-    }
-    None
 }
 
 #[cfg(test)]
@@ -232,5 +115,69 @@ mod tests {
         assert_eq!(parse_ssid("ESSID:off/any\n"), None);
         assert_eq!(parse_ssid("ESSID:\"\"\n"), None, "empty SSID rejected");
         assert_eq!(parse_ssid("no essid here"), None);
+    }
+
+    #[test]
+    fn parse_wpa_networks_basic() {
+        let out = "network_id / ssid / bssid / flags\n\
+                   0\thome-net\tany\t[CURRENT]\n\
+                   1\toffice\tany\t\n\
+                   2\tphone\tany\t[DISABLED]\n";
+        let nets = parse_wpa_networks(out);
+        assert_eq!(nets.len(), 2);
+        assert_eq!(nets[0].id, 0);
+        assert_eq!(nets[0].ssid, "home-net");
+        assert!(nets[0].connected);
+        assert_eq!(nets[1].id, 1);
+        assert_eq!(nets[1].ssid, "office");
+        assert!(!nets[1].connected);
+    }
+
+    #[test]
+    fn parse_wpa_networks_skips_disabled_and_empty() {
+        let out = "network_id / ssid / bssid / flags\n\
+                   0\t\\x00\tany\t\n\
+                   1\toffice\tany\t[DISABLED]\n\
+                   2\tgood\tany\t\n";
+        let nets = parse_wpa_networks(out);
+        assert_eq!(nets.len(), 1);
+        assert_eq!(nets[0].ssid, "good");
+    }
+
+    #[test]
+    fn parse_wpa_networks_empty() {
+        assert!(parse_wpa_networks("").is_empty());
+        assert!(parse_wpa_networks("network_id / ssid / bssid / flags\n").is_empty());
+    }
+
+    #[test]
+    fn parse_conf_ssids_quoted_and_hex() {
+        let conf = "\
+ctrl_interface=/var/run/wpa_supplicant\n\
+network={\n\
+    ssid=\"home-net\"\n\
+    psk=\"secret\"\n\
+}\n\
+network={\n\
+    ssid=4f6666696365\n\
+    psk=\"secret2\"\n\
+}\n";
+        let ssids = parse_conf_ssids(conf);
+        assert_eq!(ssids.len(), 2);
+        assert_eq!(ssids[0], "home-net");
+        assert_eq!(ssids[1], "4f6666696365");
+    }
+
+    #[test]
+    fn parse_conf_ssids_skips_empty() {
+        let conf = "ssid=\"\"\nssid=\\x00\nssid=\"good\"\n";
+        let ssids = parse_conf_ssids(conf);
+        assert_eq!(ssids, vec!["good"]);
+    }
+
+    #[test]
+    fn parse_conf_ssids_empty_input() {
+        assert!(parse_conf_ssids("").is_empty());
+        assert!(parse_conf_ssids("ctrl_interface=foo\n").is_empty());
     }
 }
