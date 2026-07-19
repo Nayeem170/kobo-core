@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Wall-clock time for the on-screen clock (shells out to `date` for the
 //! locale-correct 12-hour format).
 

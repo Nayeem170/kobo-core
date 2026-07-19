@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! `AospA2dpSink` - drives the Android `audio.a2dp.default` HAL on the Kobo.
 //!
 //! Proven path (Spike A1): open the A2DP control Unix socket, send the AOSP
@@ -177,7 +179,11 @@ impl Drop for AospA2dpSink {
         if self.started {
             if let Ok(mut c) = StdStream::connect(CTRL_PATH) {
                 use std::io::Write;
-                let _ = c.write_all(&[CMD_STOP]);
+                // best-effort: Drop runs during teardown; a write failure here
+                // means the control socket is already gone (btservice stopped).
+                if let Err(e) = c.write_all(&[CMD_STOP]) {
+                    log::warn!("a2dp drop STOP write failed: {e}");
+                }
             }
         }
     }

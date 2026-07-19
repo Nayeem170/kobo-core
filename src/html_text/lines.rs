@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Line wrapping + sentence indexing for the Reader line model.
 
 /// A wrapped line of chapter text with its byte range into the source text.

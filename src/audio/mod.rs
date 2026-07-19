@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 pub mod a2dp;
 pub mod pipeline;
 pub mod player;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "audio")]

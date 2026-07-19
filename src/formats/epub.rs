@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! EPUB reading: open the book, walk the spine, and turn each chapter's XHTML
 //! into plain text + a char-offset->element map (via [`crate::html_text`]).
 //!
@@ -6,7 +8,7 @@
 //! position within that slice + the slice start = the chapter char offset,
 //! which `segment_at` resolves to a highlightable element.
 
-use crate::html_text::{extract, TextSegment};
+use crate::html_text::{extract_with_indents, parse_indents, IndentMap, TextSegment};
 use log::warn;
 use std::path::Path;
 use thiserror::Error;
@@ -38,7 +40,18 @@ impl Chapter {
     /// Build a chapter from its XHTML (loader path + unit-testable without a
     /// real EPUB file - see the html_text tests).
     pub fn from_xhtml(index: usize, title: Option<String>, xhtml: &str) -> Self {
-        let (text, segments) = extract(xhtml);
+        Self::from_xhtml_with_indents(index, title, xhtml, &IndentMap::new())
+    }
+
+    /// As [`Chapter::from_xhtml`], but resolves block indents against the
+    /// book's stylesheet so code listings keep their nesting.
+    pub fn from_xhtml_with_indents(
+        index: usize,
+        title: Option<String>,
+        xhtml: &str,
+        indents: &IndentMap,
+    ) -> Self {
+        let (text, segments) = extract_with_indents(xhtml, indents);
         Chapter {
             index,
             title,
@@ -81,6 +94,37 @@ impl Chapter {
         }
         &self.images
     }
+
+    /// Display title with fallbacks: declared title, first heading element,
+    /// first text line, then "Chapter N+1". Never a bare position label.
+    pub fn display_title(&self, idx: usize) -> String {
+        if let Some(t) = self.title.as_deref() {
+            let t = t.trim();
+            if !t.is_empty() {
+                return t.to_string();
+            }
+        }
+        for seg in &self.segments {
+            let is_heading = seg.tag.len() == 2
+                && seg.tag.starts_with('h')
+                && seg.tag.as_bytes()[1].is_ascii_digit();
+            if is_heading {
+                if let Some(slice) = self.text.get(seg.start..seg.end) {
+                    let t = slice.trim();
+                    if !t.is_empty() {
+                        return t.to_string();
+                    }
+                }
+            }
+        }
+        if let Some(first) = self.text.lines().find(|l| !l.trim().is_empty()) {
+            let t = first.trim();
+            if !t.is_empty() {
+                return t.to_string();
+            }
+        }
+        format!("Chapter {}", idx + 1)
+    }
 }
 
 /// An opened EPUB.
@@ -109,12 +153,13 @@ impl EpubBook {
         let path_str = path.as_ref().to_string_lossy().into_owned();
         let mut doc =
             epub::doc::EpubDoc::new(path.as_ref()).map_err(|e| EpubError::Other(e.to_string()))?;
+        let indents = collect_indents(&mut doc);
         let mut chapters = Vec::new();
         let mut idx = 0usize;
         let mut skipped = 0usize;
         loop {
             if let Some((xhtml, _mime)) = doc.get_current_str() {
-                let mut ch = Chapter::from_xhtml(idx, None, &xhtml);
+                let mut ch = Chapter::from_xhtml_with_indents(idx, None, &xhtml, &indents);
                 ch.epub_path = path_str.clone();
                 ch.chapter_path = doc
                     .get_current_path()
@@ -163,6 +208,30 @@ impl EpubBook {
             chapters,
         })
     }
+}
+
+/// Build the book-wide `class -> indent-em` map from every stylesheet in the
+/// archive.
+///
+/// One map for the whole book, not per chapter: Calibre emits a single shared
+/// stylesheet, and merging is what lets a chapter that only links the shared
+/// sheet still resolve its indent classes. Later sheets win on collision, which
+/// is the same order the cascade would apply them in.
+fn collect_indents(doc: &mut epub::doc::EpubDoc<std::io::BufReader<std::fs::File>>) -> IndentMap {
+    let css_ids: Vec<String> = doc
+        .resources
+        .iter()
+        .filter(|(_, item)| item.mime.contains("css"))
+        .map(|(id, _)| id.clone())
+        .collect();
+    let mut map = IndentMap::new();
+    for id in css_ids {
+        if let Some((bytes, _mime)) = doc.get_resource(&id) {
+            map.extend(parse_indents(&String::from_utf8_lossy(&bytes)));
+        }
+    }
+    log::info!("epub: {} indent classes from stylesheets", map.len());
+    map
 }
 
 /// Flatten the EPUB TOC tree into a label-by-path map.

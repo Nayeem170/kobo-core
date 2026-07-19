@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 use crate::device::config::{DeviceConfig, SocFamily, TouchProtocol};
 
 pub fn mtk_devices() -> Vec<DeviceConfig> {

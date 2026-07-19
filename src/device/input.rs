@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 pub const EV_SYN: u16 = 0x00;
 pub const EV_KEY: u16 = 0x01;
 pub const EV_ABS: u16 = 0x03;

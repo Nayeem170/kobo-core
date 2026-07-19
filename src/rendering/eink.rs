@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! E-ink framebuffer constants, MXCFB ioctl structs, and row-diff helper.
 //!
 //! The `Fb` struct (mmap + ioctl + `present()`) lives in

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -108,7 +110,7 @@ pub fn spawn_power_monitor(pressed: Arc<AtomicBool>, exit: Arc<AtomicBool>, powe
 /// Requires a long, deliberate swipe: it must start in the bottom ~40% of the
 /// screen, travel upward at least ~40% of the screen height, and be more
 /// vertical than horizontal - so a short accidental flick won't unlock.
-fn is_wake_swipe(
+pub fn is_wake_swipe(
     press_x: f32,
     press_y: f32,
     release_x: f32,

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Framebuffer: mmap'd `/dev/fb0` with MXCFB e-ink refresh.
 //!
 //! Takes raw `&[u8]` RGB565 buffers (2 bytes/pixel, little-endian) so the
@@ -14,6 +16,14 @@ use log::{debug, info, warn};
 
 const UPDATE_MARKER: u32 = 1;
 const WAIT_FALLBACK_MS: u64 = 400;
+
+#[derive(Debug, Clone, Copy)]
+pub struct UpdateRegion {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
+}
 
 pub fn dump_ppm(path: &str, buf: &[u8], w: usize, h: usize) {
     let mut out = Vec::with_capacity(15 + w * h * 3);
@@ -112,6 +122,87 @@ impl Fb {
             g_off,
             b_off,
         })
+    }
+
+    /// Blit and refresh an arbitrary rectangle, rather than `present`'s
+    /// full-width band.
+    ///
+    /// Needed when a waveform must be kept off neighbouring pixels: a 1-bit
+    /// waveform (A2/DU) drives every pixel in its update region to black or
+    /// white, so a full-width band would flatten anything colourful sharing those
+    /// rows. Bounding the region horizontally keeps the waveform on the animated
+    /// area alone.
+    pub fn present_rect(&self, buf: &[u8], w: usize, h: usize, rect: &UpdateRegion, waveform: u32) {
+        let x0 = rect.x.min(self.xres);
+        let y0 = rect.y.min(self.yres);
+        let x1 = (rect.x + rect.w).min(w).min(self.xres);
+        let y1 = (rect.y + rect.h).min(h).min(self.yres);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
+        // SAFETY: identical to `present` -- self.ptr is the mmap'd framebuffer of
+        // length self.map_len, and we only write fb pixels through this &self.
+        let fb = unsafe { std::slice::from_raw_parts_mut(self.ptr, self.map_len) };
+        let bpp = self.bpp;
+        let stride = self.stride;
+        for py in y0..y1 {
+            let row = py * w;
+            let fb_row = py * stride;
+            for px in x0..x1 {
+                let buf_off = (row + px) * 2;
+                let pix = (buf[buf_off] as u16) | ((buf[buf_off + 1] as u16) << 8);
+                let off = fb_row + px * (bpp / 8);
+                match bpp {
+                    32 => {
+                        let r = (((pix >> 11) & 0x1f) << 3) as u8;
+                        let g = (((pix >> 5) & 0x3f) << 2) as u8;
+                        let b = ((pix & 0x1f) << 3) as u8;
+                        fb[off + (self.r_off / 8) as usize] = r;
+                        fb[off + (self.g_off / 8) as usize] = g;
+                        fb[off + (self.b_off / 8) as usize] = b;
+                        fb[off + 3] = 0xff;
+                    }
+                    16 => {
+                        fb[off] = (pix & 0xff) as u8;
+                        fb[off + 1] = (pix >> 8) as u8;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // msync whole rows spanning the rect: page granularity makes a tighter
+        // flush pointless, and MS_SYNC on the row span is what the ioctl needs.
+        let sync_start = y0 * stride;
+        let sync_len = ((y1 - y0) * stride).max(1);
+        // SAFETY: sync_start + sync_len <= yres*stride <= map_len (y1 clamped to
+        // yres above), so the range stays inside the mapping.
+        unsafe {
+            libc::msync(
+                self.ptr.add(sync_start) as *mut libc::c_void,
+                sync_len,
+                libc::MS_SYNC,
+            );
+        }
+        let upd = MxcfbUpdateData {
+            update_region: MxcfbRect {
+                top: y0 as u32,
+                left: x0 as u32,
+                width: (x1 - x0) as u32,
+                height: (y1 - y0) as u32,
+            },
+            waveform_mode: waveform,
+            update_mode: 0,
+            update_marker: UPDATE_MARKER,
+            temp: 0x1000,
+            flags: 0,
+        };
+        // SAFETY: MXCFB_SEND_UPDATE reads one initialized #[repr(C)]
+        // MxcfbUpdateData; self.fd is the valid fb0 descriptor. rc<0 is non-fatal.
+        let rc = unsafe { libc::ioctl(self.fd, MXCFB_SEND_UPDATE as _, &upd) };
+        debug!(
+            "eink refresh (RECT wf={} x=[{},{}] y=[{},{}]) rc={}",
+            waveform, x0, x1, y0, y1, rc
+        );
     }
 
     /// Blit an RGB565 byte buffer to the framebuffer and trigger an e-ink

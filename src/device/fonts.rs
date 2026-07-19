@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Font loading from the on-device font directory.
 //!
 //! Non-Latin fonts (Bengali/Devanagari/Arabic/Thai/CJK) are NOT downloaded at
@@ -6,13 +8,12 @@
 //! at install time. This module just loads them from disk at startup / on demand.
 //! The default font (NotoSansLatin, covering Latin) is embedded in the binary.
 
+use crate::device::paths::{FONTS_DIR, SYSTEM_FONTS_DIR, USER_FONTS_DIR};
 use crate::rendering::text_render::{
     detect_script, font_covers, has_font_for, install_font, Script,
 };
 use std::fs;
 use std::path::PathBuf;
-
-const FONTS_DIR: &str = "/mnt/onboard/.adds/fonts";
 
 struct FontSpec {
     script: Script,
@@ -23,6 +24,12 @@ struct FontSpec {
     probe: &'static str,
 }
 
+/// One entry per loadable script. Adding a script means adding a line here and
+/// a variant to `Script` - nothing else in the font pipeline needs touching.
+///
+/// Probes must be characters the *target* font is guaranteed to have. Keep them
+/// script-specific: a probe shared with another script would let the wrong face
+/// satisfy the check.
 const FONT_SPECS: &[FontSpec] = &[
     FontSpec {
         script: Script::Bengali,
@@ -43,16 +50,128 @@ const FONT_SPECS: &[FontSpec] = &[
         probe: "ابتة",
     },
     FontSpec {
-        script: Script::Cjk,
-        filename: "NotoSansJP.ttf",
-        label: "Japanese",
-        probe: "日本語字",
+        script: Script::Hebrew,
+        filename: "NotoSansHebrew.ttf",
+        label: "Hebrew",
+        probe: "אבגד",
+    },
+    // Greek and Cyrillic are not separate Noto families - both live in the base
+    // NotoSans face alongside Latin, so the two specs share one file.
+    FontSpec {
+        script: Script::Greek,
+        filename: "NotoSans.ttf",
+        label: "Greek",
+        probe: "αβγδ",
+    },
+    FontSpec {
+        script: Script::Cyrillic,
+        filename: "NotoSans.ttf",
+        label: "Cyrillic",
+        probe: "абвг",
+    },
+    FontSpec {
+        script: Script::Georgian,
+        filename: "NotoSansGeorgian.ttf",
+        label: "Georgian",
+        probe: "აბგდ",
+    },
+    FontSpec {
+        script: Script::Armenian,
+        filename: "NotoSansArmenian.ttf",
+        label: "Armenian",
+        probe: "աբգդ",
+    },
+    FontSpec {
+        script: Script::Ethiopic,
+        filename: "NotoSansEthiopic.ttf",
+        label: "Amharic",
+        probe: "ሀለሐመ",
+    },
+    FontSpec {
+        script: Script::Gujarati,
+        filename: "NotoSansGujarati.ttf",
+        label: "Gujarati",
+        probe: "અકગમ",
+    },
+    FontSpec {
+        script: Script::Gurmukhi,
+        filename: "NotoSansGurmukhi.ttf",
+        label: "Punjabi",
+        probe: "ਅਕਗਮ",
+    },
+    FontSpec {
+        script: Script::Tamil,
+        filename: "NotoSansTamil.ttf",
+        label: "Tamil",
+        probe: "அகசத",
+    },
+    FontSpec {
+        script: Script::Telugu,
+        filename: "NotoSansTelugu.ttf",
+        label: "Telugu",
+        probe: "అకగమ",
+    },
+    FontSpec {
+        script: Script::Kannada,
+        filename: "NotoSansKannada.ttf",
+        label: "Kannada",
+        probe: "ಅಕಗಮ",
+    },
+    FontSpec {
+        script: Script::Malayalam,
+        filename: "NotoSansMalayalam.ttf",
+        label: "Malayalam",
+        probe: "അകഗമ",
+    },
+    FontSpec {
+        script: Script::Sinhala,
+        filename: "NotoSansSinhala.ttf",
+        label: "Sinhala",
+        probe: "අකගම",
     },
     FontSpec {
         script: Script::Thai,
         filename: "NotoSansThai.ttf",
         label: "Thai",
         probe: "กขคง",
+    },
+    FontSpec {
+        script: Script::Lao,
+        filename: "NotoSansLao.ttf",
+        label: "Lao",
+        probe: "ກຂຄງ",
+    },
+    FontSpec {
+        script: Script::Khmer,
+        filename: "NotoSansKhmer.ttf",
+        label: "Khmer",
+        probe: "កខគង",
+    },
+    FontSpec {
+        script: Script::Myanmar,
+        filename: "NotoSansMyanmar.ttf",
+        label: "Burmese",
+        probe: "ကခဂဃ",
+    },
+    FontSpec {
+        script: Script::Japanese,
+        filename: "NotoSansJP.ttf",
+        label: "Japanese",
+        // Kana: present in a Japanese face, absent from a Chinese-only one.
+        probe: "あいカキ",
+    },
+    FontSpec {
+        script: Script::Korean,
+        filename: "NotoSansKR.ttf",
+        label: "Korean",
+        probe: "가나다라",
+    },
+    FontSpec {
+        script: Script::Chinese,
+        filename: "NotoSansSC.ttf",
+        label: "Chinese",
+        // Simplified-only forms, so a Japanese face cannot satisfy this.
+        probe: "这说门车",
     },
 ];
 
@@ -62,6 +181,17 @@ fn font_path(filename: &str) -> PathBuf {
 
 fn spec_for_script(script: Script) -> Option<&'static FontSpec> {
     FONT_SPECS.iter().find(|s| s.script == script)
+}
+
+/// Heavy CJK faces (4-9 MB each, ~1.5 s parse time per file) are NOT loaded at
+/// boot - they would add ~3 s to every cold launch for scripts most books never
+/// use. They load on demand via `ensure_font_for_script` (called at book-open in
+/// `open_book.rs`) the first time a book in that script is opened.
+fn is_lazy_script(script: Script) -> bool {
+    matches!(
+        script,
+        Script::Japanese | Script::Korean | Script::Chinese
+    )
 }
 
 /// Try to load a font from disk. Returns true on success.
@@ -87,9 +217,32 @@ fn lang_to_script(lang: &str) -> Script {
     match prefix {
         "bn" => Script::Bengali,
         "hi" | "mr" | "ne" => Script::Devanagari,
-        "ar" | "ur" | "fa" => Script::Arabic,
-        "ja" | "zh" | "ko" => Script::Cjk,
+        "ar" | "ur" | "fa" | "ps" => Script::Arabic,
+        "he" | "iw" => Script::Hebrew,
+        "el" => Script::Greek,
+        // Kazakh and Mongolian are written in Cyrillic in the locales Edge
+        // offers voices for (kk-KZ, mn-MN).
+        "ru" | "uk" | "bg" | "mk" | "sr" | "kk" | "mn" | "be" => Script::Cyrillic,
+        "ka" => Script::Georgian,
+        "hy" => Script::Armenian,
+        "am" | "ti" => Script::Ethiopic,
+        "gu" => Script::Gujarati,
+        "pa" => Script::Gurmukhi,
+        "ta" => Script::Tamil,
+        "te" => Script::Telugu,
+        "kn" => Script::Kannada,
+        "ml" => Script::Malayalam,
+        "si" => Script::Sinhala,
         "th" => Script::Thai,
+        "lo" => Script::Lao,
+        "km" => Script::Khmer,
+        "my" => Script::Myanmar,
+        "ja" => Script::Japanese,
+        "ko" => Script::Korean,
+        // Covers zh-CN, zh-TW and zh-HK. NotoSansSC carries the traditional
+        // forms too, so Taiwan and Hong Kong render - only the preferred glyph
+        // shapes differ from a dedicated NotoSansTC.
+        "zh" => Script::Chinese,
         _ => Script::Latin,
     }
 }
@@ -98,11 +251,7 @@ fn lang_to_script(lang: &str) -> Script {
 ///   1. installer-shipped NotoSans fonts (always present after a USB install)
 ///   2. user side-loaded fonts (/mnt/onboard/fonts = Kobo's "fonts" folder)
 ///   3. Kobo's bundled system fonts (/usr/local/Kobo/fonts, on the rootfs)
-const FONT_SEARCH_DIRS: &[&str] = &[
-    "/mnt/onboard/.adds/fonts",
-    "/mnt/onboard/fonts",
-    "/usr/local/Kobo/fonts",
-];
+const FONT_SEARCH_DIRS: &[&str] = &[FONTS_DIR, USER_FONTS_DIR, SYSTEM_FONTS_DIR];
 
 /// List every font file in the search dirs (diagnostic: shows what the device
 /// has available so we can reuse Kobo's own fonts instead of shipping them).
@@ -174,6 +323,9 @@ fn find_covering_font(spec: &FontSpec) -> Option<PathBuf> {
 pub fn load_cached_fonts() {
     let mut loaded = 0;
     for spec in FONT_SPECS {
+        if is_lazy_script(spec.script) {
+            continue;
+        }
         if try_load_from_disk(spec) {
             loaded += 1;
             continue;

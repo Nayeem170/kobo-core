@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! `SharedClock` - the single playback time source (decision 2).
 //!
 //! Both the Player (worker thread) and the UI (main thread) read the SAME

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;

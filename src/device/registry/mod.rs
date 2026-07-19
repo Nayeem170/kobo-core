@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 pub mod legacy;
 pub mod mtk;
 pub mod nxp;

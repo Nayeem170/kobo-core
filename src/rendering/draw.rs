@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 use crate::rendering::common::BODY_PX;
 use crate::rendering::layout::word_wrap_bytes;
 use crate::rendering::text_render;
@@ -138,6 +140,22 @@ pub fn measure_text(text: &str, px: f32) -> usize {
         }
     }
     total as usize
+}
+
+pub fn truncate_to_width(s: &str, px: f32, max_w: usize) -> String {
+    if measure_text(s, px) <= max_w {
+        return s.to_string();
+    }
+    let mut out: String = s.chars().take(3).collect();
+    for ch in s.chars().skip(3) {
+        out.push(ch);
+        if measure_text(&(out.clone() + "..."), px) > max_w {
+            out.pop();
+            break;
+        }
+    }
+    out.push_str("...");
+    out
 }
 
 pub const ACTION_BTN_FILL: u16 = 0x0349;
