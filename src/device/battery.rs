@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Battery: capacity read from `/sys/class/power_supply`, with type checking
 //! so a USB/Mains supply isn't mistaken for the battery.
 

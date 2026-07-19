@@ -1,4 +1,6 @@
-pub const KLOG: &str = "/mnt/onboard/.adds/kothok.log";
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
+pub use crate::device::paths::KLOG;
 
 pub struct FileLogger;
 impl log::Log for FileLogger {

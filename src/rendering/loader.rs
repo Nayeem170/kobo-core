@@ -1,24 +1,25 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Loading indicators for splash and loading screens.
 //!
 //! Pure functions operating on raw RGB565 byte buffers. All take explicit
 //! screen dimensions so they are reusable by any crate without global state.
 //!
 //! - [`paint_loading_bar`] - horizontal progress bar at the bottom of the screen
-//! - [`paint_spinner`] - rotating arc spinner centred near the bottom
+//!
+//! There used to be a rotating-arc spinner here. It was removed: a rotating arc
+//! drives every pixel in its ring from black to white and back, continuously,
+//! for as long as loading takes. Non-monotone and unbounded is the worst case
+//! this panel can be given, and no amount of tuning the rate fixed it. The
+//! splash now reveals its wordmark one piece at a time instead, so each pixel
+//! changes state exactly once (see `rendering::splash` in the app crate).
+//!
+//! A progress bar only ever fills in one direction, so it stays valid.
 
 const BAR_SIDE_PAD: usize = 80;
 const BAR_HEIGHT: usize = 8;
 const BAR_FILL_COLOR: u16 = 0x06A4;
 const BAR_TRACK_COLOR: u16 = 0xD6BA;
-
-const SPINNER_ARC_COLOR: u16 = 0xF148;
-
-const SPINNER_OFFSET_FROM_BOTTOM: f32 = 130.0;
-const SPINNER_BADGE_R: f32 = 52.0;
-const SPINNER_ARC_R: f32 = 36.0;
-const SPINNER_ARC_THICK: f32 = 9.0;
-const SPINNER_ARC_SPAN: u32 = 300;
-const SPINNER_PAD: i32 = 56;
 
 /// A screen rectangle (x, y, width, height) in pixels, for partial-refresh
 /// bounding regions.
@@ -81,59 +82,36 @@ pub fn loading_bar_rect(screen_w: i32, screen_h: i32) -> Rect {
     }
 }
 
-/// Draw a rotating-arc spinner centred horizontally near the bottom.
+/// Area-average downscale of an RGB888 buffer.
 ///
-/// `angle_deg` is the clockwise start angle of the arc (0 = right). The arc
-/// spans [`SPINNER_ARC_SPAN`] degrees. Pixels inside the badge circle but
-/// outside the arc ring are set to white (0xFFFF).
-pub fn paint_spinner(buf: &mut [u8], screen_w: usize, screen_h: usize, angle_deg: u32) {
-    let cx = screen_w as f32 / 2.0;
-    let cy = screen_h as f32 - SPINNER_OFFSET_FROM_BOTTOM;
-    let badge_r = SPINNER_BADGE_R;
-    let arc_r = SPINNER_ARC_R;
-    let arc_thick = SPINNER_ARC_THICK;
-    let span = SPINNER_ARC_SPAN;
-    for py in 0..screen_h {
-        let dy = py as f32 - cy;
-        if dy.abs() > badge_r + 2.0 {
-            continue;
-        }
-        for px in 0..screen_w {
-            let dx = px as f32 - cx;
-            let dist = (dx * dx + dy * dy).sqrt();
-            if dist > badge_r + 2.0 {
-                continue;
-            }
-            let mut val: u16 = 0xFFFF;
-            if (dist - arc_r).abs() <= arc_thick {
-                let a = (-dy).atan2(dx).to_degrees().rem_euclid(360.0);
-                let start = angle_deg as f32;
-                let end = start + span as f32;
-                let in_arc = if end <= 360.0 {
-                    a >= start && a < end
-                } else {
-                    a >= start || a < end - 360.0
-                };
-                if in_arc {
-                    val = SPINNER_ARC_COLOR;
+/// Averaging every source pixel that lands in a destination cell preserves
+/// thin strokes as continuous grey rather than flickering fragments.
+pub fn box_downscale(src: &[u8], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<u8> {
+    let mut out = vec![0u8; dw * dh * 3];
+    for dy in 0..dh {
+        let y0 = dy * sh / dh;
+        let y1 = (((dy + 1) * sh).div_ceil(dh)).min(sh).max(y0 + 1);
+        for dx in 0..dw {
+            let x0 = dx * sw / dw;
+            let x1 = (((dx + 1) * sw).div_ceil(dw)).min(sw).max(x0 + 1);
+            let (mut r, mut g, mut b, mut n) = (0u32, 0u32, 0u32, 0u32);
+            for sy in y0..y1 {
+                let row = sy * sw;
+                for sx in x0..x1 {
+                    let o = (row + sx) * 3;
+                    r += src[o] as u32;
+                    g += src[o + 1] as u32;
+                    b += src[o + 2] as u32;
+                    n += 1;
                 }
             }
-            put_pixel(buf, screen_w, px, py, val);
+            let o = (dy * dw + dx) * 3;
+            out[o] = (r / n) as u8;
+            out[o + 1] = (g / n) as u8;
+            out[o + 2] = (b / n) as u8;
         }
     }
-}
-
-/// Bounding rectangle of the spinner.
-pub fn spinner_rect(screen_w: i32, screen_h: i32) -> Rect {
-    let cx = screen_w / 2;
-    let cy = screen_h - SPINNER_OFFSET_FROM_BOTTOM as i32;
-    let r = SPINNER_PAD;
-    Rect {
-        x: cx - r,
-        y: cy - r,
-        w: r * 2,
-        h: r * 2,
-    }
+    out
 }
 
 #[cfg(test)]
@@ -167,24 +145,6 @@ mod tests {
     }
 
     #[test]
-    fn spinner_rect_is_centred_square() {
-        let r = spinner_rect(800, 600);
-        let cx = 800 / 2;
-        let cy = 600 - SPINNER_OFFSET_FROM_BOTTOM as i32;
-        let rad = SPINNER_PAD;
-        assert_eq!(
-            r,
-            Rect {
-                x: cx - rad,
-                y: cy - rad,
-                w: 2 * rad,
-                h: 2 * rad,
-            }
-        );
-        assert_eq!(r.w, r.h);
-    }
-
-    #[test]
     fn paint_loading_bar_fill_vs_track() {
         let (w, h) = (800usize, 600usize);
         let mut buf = vec![0u8; w * h * 2];
@@ -196,5 +156,22 @@ mod tests {
 
         paint_loading_bar(&mut buf, w, h, 1.0);
         assert_eq!(&buf[off..off + 2], &BAR_FILL_COLOR.to_le_bytes());
+    }
+
+    #[test]
+    fn box_downscale_averages_block() {
+        let src = [100u8, 200, 50, 100, 200, 50, 100, 200, 50, 100, 200, 50];
+        let out = box_downscale(&src, 2, 2, 1, 1);
+        assert_eq!(out.len(), 3);
+        assert_eq!(out[0], 100);
+        assert_eq!(out[1], 200);
+        assert_eq!(out[2], 50);
+    }
+
+    #[test]
+    fn box_downscale_identity_passes_through() {
+        let src = [10u8, 20, 30, 40, 50, 60];
+        let out = box_downscale(&src, 1, 2, 1, 2);
+        assert_eq!(out, src);
     }
 }

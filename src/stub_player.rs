@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! `StubPlayer` - a headless stub proving the control + shared-clock + highlight
 //! loop (decision 1 multi-thread + decision 2 single clock) WITHOUT real audio
 //! or a Slint window. The desktop sim drives it with fake `WordMark`s; the real

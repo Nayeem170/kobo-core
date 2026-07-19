@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Bluetooth: adapter power, A2DP device connect/disconnect, paired-device
 //! discovery, and the friendly name read-out for the panel pill. All bluez /
 //! mtk.bluedroid DBus interaction lives here.
@@ -15,11 +17,11 @@ use crate::device::config::SocFamily;
 mod discover;
 
 pub use discover::bt_target_device;
+pub use discover::PairedDevice;
 use discover::{
     clear_cached_bt_device, discover_connected_paired_device, discover_paired_devices,
     set_cached_bt_device,
 };
-pub use discover::PairedDevice;
 
 /// Wall-clock millis of the last user-initiated BT toggle. The UI status refresh
 /// uses `bt_toggle_age_ms` to avoid reverting the pill to "off" while an async
@@ -60,6 +62,7 @@ pub fn set_bt_bus(soc: SocFamily) {
         SocFamily::Mtk => BT_BUS_MTK,
         SocFamily::Nxp | SocFamily::Sunxi => BT_BUS_BLUEZ,
     };
+    // best-effort: OnceLock::set only fails if already set (first call wins)
     let _ = BT_BUS.set(bus);
     info!("bt: bus = {} ({:?})", bus, soc);
 }
@@ -177,6 +180,7 @@ pub fn bt_toggle(on: bool) {
         }
         info!("bt: adapter powered on (bus={})", bt_bus());
         // Reconnect (Connect can retry for several seconds) off the main loop.
+        // best-effort: the handle is dropped so the thread runs detached
         let _ = std::thread::spawn(reconnect_bt);
         info!("bt: turned ON + reconnecting");
     } else {
@@ -325,6 +329,7 @@ pub fn bt_connect_device(path: &str) {
     info!("bt: switching to device {path}");
     if let Some(current) = bt_target_device() {
         if current != path {
+            // best-effort: a failed disconnect doesn't block the connect that follows
             let _ = dbus_cmd()
                 .args([&current, DBUS_DEVICE1_DISCONNECT])
                 .stdout(Stdio::null())
@@ -344,7 +349,11 @@ pub fn bt_connect_device(path: &str) {
                 .stderr(Stdio::null())
                 .status();
             let connected = device_connected(&path);
-            debug!("bt_connect_device: attempt {attempt} rc={:?} connected={}", rc.as_ref().ok().and_then(|s| s.code()), connected);
+            debug!(
+                "bt_connect_device: attempt {attempt} rc={:?} connected={}",
+                rc.as_ref().ok().and_then(|s| s.code()),
+                connected
+            );
             if connected {
                 return;
             }

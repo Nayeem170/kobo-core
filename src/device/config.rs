@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Pure device configuration types and lookup - no IO.
 //!
 //! These types describe per-model hardware capabilities. IO-bound detection

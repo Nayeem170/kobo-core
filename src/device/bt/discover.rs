@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Bluetooth paired-device discovery: parse the bluez ObjectManager dump,
 //! cache the active target device, and resolve which device to talk to.
 

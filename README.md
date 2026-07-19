@@ -46,7 +46,7 @@ Four feature-gated modules, pick what you need:
 |--------|---------|------------------|
 | `device` | `device` | Framebuffer + e-ink refresh, touch input, power button, frontlight, wakelocks, battery, WiFi, Bluetooth, device detection |
 | `rendering` | `rendering` | Text engine (HarfBuzz + fontdue), e-ink waveform constants, dirty-region diffing, image decode (PNG/JPEG/GIF/BMP) |
-| `audio` | `audio` | A2DP sink, PCM player with paced writes, MP3 decode + resample, TTS synthesis orchestration |
+| `audio` | `audio` | A2DP sink, PCM player with paced writes, MP3 decode + resample, TTS synthesis orchestration (re-exports `kothok-edge-tts`; TTS needs WiFi) |
 | `formats` | `reader` | EPUB parsing: chapter extraction, cover image, metadata |
 
 All enabled by default. Disable what you don't need:

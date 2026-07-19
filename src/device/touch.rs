@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Touch->display transform + gesture predicates.
 //!
 //! The transform uses per-device flags from `DeviceConfig`:

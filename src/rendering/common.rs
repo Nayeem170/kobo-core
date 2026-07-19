@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Shared rendering state and constants.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,6 +12,20 @@ pub fn set_rtl(rtl: bool) {
 
 pub fn is_rtl() -> bool {
     IS_RTL.load(Ordering::Relaxed)
+}
+
+/// Whether a BCP-47 language code (e.g. "ar-SA", "en-US") resolves to an RTL
+/// script. Complements [`crate::rendering::text_render::Script::is_rtl`], which
+/// works on text content; this works on a declared language tag.
+pub fn lang_is_rtl(lang: Option<&str>) -> bool {
+    let prefix = lang
+        .and_then(|l| l.split('-').next())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    matches!(
+        prefix.as_str(),
+        "ar" | "ur" | "fa" | "he" | "yi" | "ps" | "sd"
+    )
 }
 
 pub const BODY_PX: f32 = 36.0;

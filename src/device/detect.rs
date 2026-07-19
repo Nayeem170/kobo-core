@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Nayeem Bin Ahsan
 //! Device detection IO: codename discovery, input scanning, sysfs automagic.
 //!
 //! Pure types and lookup live in [`crate::device::config`].
@@ -6,6 +8,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use log::{info, warn};
+
+use crate::device::paths::VERSION_FILE;
 
 use crate::device::config::{
     detect_from_codename, lookup_device, parse_input_devices, DeviceConfig, InputDevices, SocFamily,
@@ -29,7 +33,7 @@ fn product_from_kobo_config() -> Option<String> {
 }
 
 fn product_from_version() -> Option<String> {
-    let content = fs::read_to_string("/mnt/onboard/.kobo/version").ok()?;
+    let content = fs::read_to_string(VERSION_FILE).ok()?;
     let last_line = content.lines().last()?.trim();
     let parts: Vec<&str> = last_line.split(',').collect();
     let version = parts.last()?.trim();
