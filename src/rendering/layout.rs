@@ -184,6 +184,17 @@ pub fn sentences_with_ranges(text: &str) -> Vec<(String, usize, usize)> {
     let mut ci = 0usize;
     while ci < n {
         let (byte_idx, ch) = chars[ci];
+        // A newline is a hard paragraph boundary: block elements are joined with
+        // '\n', so it always ends an utterance even when a paragraph carries no
+        // terminal punctuation (Thai/Lao prose, a heading, or a caption). Without
+        // this, such paragraphs run together into one mega-utterance spanning
+        // several scripts, and detect_script on the blob picks the wrong voice.
+        if ch == '\n' {
+            push_sentence(&mut out, text, chunk_start, byte_idx);
+            chunk_start = byte_idx + 1;
+            ci += 1;
+            continue;
+        }
         if is_sentence_terminator(ch) && is_real_sentence_end(&chars, ci) {
             let end = byte_idx + ch.len_utf8();
             push_sentence(&mut out, text, chunk_start, end);
@@ -268,7 +279,18 @@ pub fn resolve_progress_target(
 fn is_sentence_terminator(ch: char) -> bool {
     matches!(
         ch,
-        '.' | '!' | '?' | '\u{0964}' | '\u{0965}' | '\u{3002}' | '\u{FF01}' | '\u{FF1F}'
+        '.' | '!'
+            | '?'
+            | '\u{0964}'
+            | '\u{0965}'
+            | '\u{3002}'
+            | '\u{FF01}'
+            | '\u{FF1F}'
+            | '\u{17D4}'
+            | '\u{17D5}'
+            | '\u{104A}'
+            | '\u{104B}'
+            | '\u{1362}'
     )
 }
 
@@ -374,7 +396,17 @@ fn is_real_sentence_end(chars: &[(usize, char)], i: usize) -> bool {
     let prev = char_at(chars, (i as isize) - 1);
     let next = char_at(chars, (i as isize) + 1);
 
-    if matches!(ch, '\u{3002}' | '\u{FF01}' | '\u{FF1F}') {
+    if matches!(
+        ch,
+        '\u{3002}'
+            | '\u{FF01}'
+            | '\u{FF1F}'
+            | '\u{17D4}'
+            | '\u{17D5}'
+            | '\u{104A}'
+            | '\u{104B}'
+            | '\u{1362}'
+    ) {
         return true;
     }
 

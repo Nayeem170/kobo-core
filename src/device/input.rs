@@ -11,6 +11,16 @@ pub const BTN_TOUCH_CODE: u16 = 330;
 pub const EVIOCGABS_X: libc::c_ulong = 0x80184572;
 pub const EVIOCGABS_Y: libc::c_ulong = 0x80184576;
 
+/// Decode (type, code, value) from a 16-byte arm evdev `input_event`. The first
+/// 8 bytes are the timeval timestamp, ignored.
+pub fn decode_input_event(buf: &[u8; 16]) -> (u16, u16, i32) {
+    (
+        u16::from_le_bytes([buf[8], buf[9]]),
+        u16::from_le_bytes([buf[10], buf[11]]),
+        i32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+    )
+}
+
 #[repr(C)]
 #[derive(Default)]
 pub struct InputAbsinfo {

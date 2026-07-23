@@ -188,10 +188,7 @@ fn spec_for_script(script: Script) -> Option<&'static FontSpec> {
 /// use. They load on demand via `ensure_font_for_script` (called at book-open in
 /// `open_book.rs`) the first time a book in that script is opened.
 fn is_lazy_script(script: Script) -> bool {
-    matches!(
-        script,
-        Script::Japanese | Script::Korean | Script::Chinese
-    )
+    matches!(script, Script::Japanese | Script::Korean | Script::Chinese)
 }
 
 /// Try to load a font from disk. Returns true on success.
@@ -356,8 +353,14 @@ pub fn load_cached_fonts() {
 /// - Font already installed or on disk -> None (loaded if needed)
 /// - Font not on disk -> a short message telling the user to reinstall
 pub fn ensure_font_for_script(lang: Option<&str>, sample_text: &str) -> Option<String> {
+    // Prefer the declared language, but only when it actually points at a
+    // loadable script. Many EPUBs declare `dc:language = en` while their body is
+    // CJK (or another non-Latin script): trusting that would detect Latin and
+    // skip loading the real face, leaving the page blank. Fall back to content
+    // detection whenever the tag resolves to Latin/Other.
     let script = lang
         .map(lang_to_script)
+        .filter(|s| !matches!(s, Script::Latin | Script::Other))
         .unwrap_or_else(|| detect_script(sample_text));
 
     if has_font_for(script) {

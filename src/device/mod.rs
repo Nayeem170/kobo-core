@@ -13,6 +13,7 @@
 //! - [`clock`] - wall-clock time (shells out to `date`)
 //! - [`power`] - `WakeLock`, frontlight get/set, kernel suspend
 //! - [`wake`] - power-button monitor, touch-wake polling
+//! - [`media_keys`] - AVRCP media-button monitor (BT play/pause/next/prev)
 //! - [`detect`] - `detect_device()`, `scan_input_devices()`, automagic sysfs
 //! - [`fonts`] - font directory scanning, `install_font()` bridge
 //! - [`fb`] - framebuffer mmap + MXCFB e-ink refresh
@@ -28,6 +29,7 @@ pub mod fb;
 pub mod fonts;
 pub mod impls;
 pub mod input;
+pub mod media_keys;
 pub mod paths;
 pub mod power;
 pub mod registry;
