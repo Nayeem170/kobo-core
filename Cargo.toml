@@ -1,6 +1,6 @@
 [package]
 name = "kobo-core"
-version = "0.3.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["Nayeem Bin Ahsan"]
 description = "Kobo e-reader device SDK: device database, sysfs/ioctl, rendering, audio pipeline, trait surface"
