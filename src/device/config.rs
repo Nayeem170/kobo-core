@@ -128,43 +128,83 @@ pub fn detect_from_codename(codename: &str) -> &'static DeviceConfig {
 }
 
 /// Pure parser for `/proc/bus/input/devices` text. Returns (touch_path,
-/// power_path) extracted from the Handlers + Phys lines, before any fallback
-/// to /dev/input/event{1,2}. No IO.
+/// power_path) extracted from the Name + Handlers + Phys lines, before any
+/// fallback to /dev/input/event{1,2}. No IO.
+///
+/// The kernel emits lines in order I, N, P, S, U, H, B per device. This
+/// parser accumulates each device block and checks it once complete, so it
+/// works regardless of line order. It also matches the `N: Name=` line
+/// against common touch-panel driver names (cyttsp, goodix, ft5, tpd, etc.)
+/// so devices whose Phys lacks "touch"/"ts" are still detected.
+///
+/// Power selection is two-pass: the first device whose name or phys contains
+/// "power" wins. If none does, any gpio/keys device is used. This prevents a
+/// generic gpio-keys entry (which may also handle page-turn buttons on Libra)
+/// from shadowing the real power button.
 pub fn parse_input_devices(content: &str) -> (Option<String>, Option<String>) {
-    let mut touch_path: Option<String> = None;
-    let mut power_path: Option<String> = None;
-    let mut current_handlers = Vec::new();
+    let mut name = String::new();
+    let mut phys = String::new();
+    let mut handlers: Vec<String> = Vec::new();
+    let mut devices: Vec<(String, String, Vec<String>)> = Vec::new();
+
     for line in content.lines() {
-        if let Some(handlers) = line.strip_prefix("H: Handlers=") {
-            current_handlers.clear();
-            current_handlers = handlers.split_whitespace().map(String::from).collect();
+        if line.starts_with("I:") && (!name.is_empty() || !handlers.is_empty()) {
+            devices.push((name.clone(), phys.clone(), handlers.clone()));
+            name.clear();
+            phys.clear();
+            handlers.clear();
         }
-        if let Some(dev) = line.strip_prefix("P: Phys=") {
-            let is_touch = current_handlers
-                .iter()
-                .any(|h| h.starts_with("event") && (dev.contains("touch") || dev.contains("ts")));
-            let is_power = current_handlers.iter().any(|h| {
-                h.starts_with("event")
-                    && (dev.contains("gpio") || dev.contains("power") || dev.contains("keys"))
-            });
-            if is_touch && touch_path.is_none() {
-                for h in &current_handlers {
-                    if h.starts_with("event") {
-                        touch_path = Some(format!("{}/{}", paths::INPUT_DEV_DIR, h));
-                        break;
-                    }
-                }
-            }
-            if is_power && power_path.is_none() {
-                for h in &current_handlers {
-                    if h.starts_with("event") {
-                        power_path = Some(format!("{}/{}", paths::INPUT_DEV_DIR, h));
-                        break;
-                    }
-                }
-            }
+        if let Some(n) = line.strip_prefix("N: Name=") {
+            name = n.trim_matches('"').to_ascii_lowercase();
+        } else if let Some(p) = line.strip_prefix("P: Phys=") {
+            phys = p.to_ascii_lowercase();
+        } else if let Some(h) = line.strip_prefix("H: Handlers=") {
+            handlers = h.split_whitespace().map(String::from).collect();
         }
     }
+    if !name.is_empty() || !handlers.is_empty() {
+        devices.push((name, phys, handlers));
+    }
+
+    let event_of = |h: &[String]| {
+        h.iter()
+            .find(|h| h.starts_with("event"))
+            .map(|ev| format!("{}/{ev}", paths::INPUT_DEV_DIR))
+    };
+
+    let is_touch = |name: &str, phys: &str| {
+        name.contains("touch")
+            || name.contains("tpd")
+            || name.contains("cyttsp")
+            || name.contains("goodix")
+            || name.contains("ft5")
+            || name.contains("novatek")
+            || name.contains("edt")
+            || name.contains("zforce")
+            || phys.contains("touch")
+            || phys.contains("ts")
+    };
+
+    let has_event = |h: &[String]| h.iter().any(|h| h.starts_with("event"));
+
+    let touch_path = devices
+        .iter()
+        .find(|(n, p, h)| is_touch(n, p) && has_event(h))
+        .and_then(|(_, _, h)| event_of(h));
+
+    let power_path = devices
+        .iter()
+        .find(|(n, p, h)| {
+            (n.contains("power") || p.contains("power")) && has_event(h)
+        })
+        .or_else(|| {
+            devices.iter().find(|(n, p, h)| {
+                (n.contains("gpio") || p.contains("gpio") || p.contains("keys"))
+                    && has_event(h)
+            })
+        })
+        .and_then(|(_, _, h)| event_of(h));
+
     (touch_path, power_path)
 }
 
@@ -202,6 +242,69 @@ H: Handlers=event2
 P: Phys=gpio-keys/power0 power\n";
         let (touch, power) = parse_input_devices(sample);
         assert_eq!(touch.as_deref(), Some("/dev/input/event1"));
+        assert_eq!(power.as_deref(), Some("/dev/input/event2"));
+    }
+
+    #[test]
+    fn parse_input_devices_kernel_order() {
+        let sample = "\
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name=\"cyttsp5_mt\"
+P: Phys=cyttsp5_mt/input0
+S: Sysfs=/devices/virtual/input/input1
+U: Uniq=
+H: Handlers=event1 mouse0
+B: PROP=2
+B: EV=b\n\
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name=\"gpio-keys\"
+P: Phys=gpio-keys/power0
+S: Sysfs=/devices/platform/gpio-keys/input/input2
+U: Uniq=
+H: Handlers=event2
+B: PROP=0
+B: EV=3\n";
+        let (touch, power) = parse_input_devices(sample);
+        assert_eq!(touch.as_deref(), Some("/dev/input/event1"));
+        assert_eq!(power.as_deref(), Some("/dev/input/event2"));
+    }
+
+    #[test]
+    fn parse_input_devices_power_priority_over_generic_keys() {
+        // Libra Colour scenario: page-turn buttons (event3, gpio-keys) enumerate
+        // before the power button (event4, gpio-keys/power0). The parser must
+        // pick event4, not event3.
+        let sample = "\
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name=\"gpio-keys\"
+P: Phys=gpio-keys/pageturn
+H: Handlers=event3\n\
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name=\"gpio-keys\"
+P: Phys=gpio-keys/power0
+H: Handlers=event4\n\
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name=\"cyttsp5_mt\"
+P: Phys=cyttsp5_mt/input0
+H: Handlers=event1 mouse0\n";
+        let (touch, power) = parse_input_devices(sample);
+        assert_eq!(touch.as_deref(), Some("/dev/input/event1"));
+        assert_eq!(power.as_deref(), Some("/dev/input/event4"));
+    }
+
+    #[test]
+    fn parse_input_devices_capitalised_name() {
+        let sample = "\
+I: Bus=0018 Vendor=0000 Product=0000 Version=0000
+N: Name=\"Goodix Capacitive TouchScreen\"
+P: Phys=input/ts
+H: Handlers=event0 mouse0\n\
+I: Bus=0019 Vendor=0001 Product=0001 Version=0100
+N: Name=\"gpio-keys\"
+P: Phys=gpio-keys/power0
+H: Handlers=event2\n";
+        let (touch, power) = parse_input_devices(sample);
+        assert_eq!(touch.as_deref(), Some("/dev/input/event0"));
         assert_eq!(power.as_deref(), Some("/dev/input/event2"));
     }
 }
