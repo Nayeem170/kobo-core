@@ -61,16 +61,17 @@ pub fn is_double_tap(dt_ms: u128, since_prev_tap_ms: u128) -> bool {
 mod tests {
     use super::*;
 
-    // Libra Colour cyttsp5_mt: switch_xy=true, mirrored_x=true
+    // Libra Colour: switch_xy=true, mirrored_x=false, mirrored_y=true
+    // Touch panel is physically landscape (1680x1264), swapped to portrait.
     fn libra_cfg() -> TouchConfig {
         TouchConfig {
             switch_xy: true,
-            mirrored_x: true,
-            mirrored_y: false,
-            raw_x_max: 1447,
-            raw_y_max: 1071,
-            screen_w: 1072,
-            screen_h: 1448,
+            mirrored_x: false,
+            mirrored_y: true,
+            raw_x_max: 1679,
+            raw_y_max: 1263,
+            screen_w: 1264,
+            screen_h: 1680,
         }
     }
 
@@ -90,7 +91,7 @@ mod tests {
     #[test]
     fn libra_left_edge_maps_small_x() {
         let cfg = libra_cfg();
-        let (dx, _) = to_display(736, 1035, &cfg);
+        let (dx, _) = to_display(736, 36, &cfg);
         assert!(
             dx < 100.0,
             "left-edge tap must map to small display_x, got {dx}"
@@ -100,9 +101,9 @@ mod tests {
     #[test]
     fn libra_right_edge_maps_large_x() {
         let cfg = libra_cfg();
-        let (dx, _) = to_display(693, 36, &cfg);
+        let (dx, _) = to_display(693, 1263, &cfg);
         assert!(
-            dx > 970.0,
+            dx > 1200.0,
             "right-edge tap must map to large display_x, got {dx}"
         );
     }
