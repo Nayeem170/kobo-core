@@ -1,0 +1,6 @@
+/target
+Cargo.lock
+
+# Local agent instructions
+AGENTS.md
+.env
