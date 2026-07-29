@@ -278,9 +278,8 @@ pub fn decode_image(raw: &[u8], max_w: usize, max_h: usize) -> Option<DecodedIma
     if ow == 0 || oh == 0 {
         return None;
     }
-    let scale = max_w as f32 / ow as f32;
-    let mut nw = max_w;
-    let mut nh = (oh as f32 * scale).round() as usize;
+    let mut nw = max_w.min(ow);
+    let mut nh = (oh as f32 * nw as f32 / ow as f32).round() as usize;
     if nh == 0 {
         return None;
     }
@@ -308,9 +307,8 @@ pub fn decode_image_rgba(raw: &[u8], max_w: usize, max_h: usize) -> Option<Decod
     if ow == 0 || oh == 0 {
         return None;
     }
-    let scale = max_w as f32 / ow as f32;
-    let mut nw = max_w;
-    let mut nh = (oh as f32 * scale).round() as usize;
+    let mut nw = max_w.min(ow);
+    let mut nh = (oh as f32 * nw as f32 / ow as f32).round() as usize;
     if nh == 0 {
         return None;
     }
