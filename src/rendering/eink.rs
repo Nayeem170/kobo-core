@@ -11,7 +11,6 @@ pub const FBIOGET_FSCREENINFO: libc::c_ulong = 0x4602;
 pub const MXCFB_SEND_UPDATE: libc::c_ulong = 0x4024462E;
 pub const MXCFB_WAIT_FOR_UPDATE_COMPLETE: libc::c_ulong = 0x4004462F;
 
-/// Linux `fb_var_screeninfo`: variable framebuffer parameters.
 #[repr(C)]
 #[derive(Default)]
 pub struct FbVarScreeninfo {
@@ -26,7 +25,6 @@ pub struct FbVarScreeninfo {
     pub rest: [u32; 32],
 }
 
-/// Linux `fb_fix_screeninfo`: fixed framebuffer parameters.
 #[repr(C)]
 #[derive(Default)]
 pub struct FbFixScreeninfo {
@@ -43,7 +41,6 @@ pub struct FbFixScreeninfo {
     rest: [u32; 16],
 }
 
-/// MXCFB update region (top/left/width/height in pixels).
 #[repr(C)]
 pub struct MxcfbRect {
     pub top: u32,
@@ -52,7 +49,6 @@ pub struct MxcfbRect {
     pub height: u32,
 }
 
-/// MXCFB `send_update` ioctl payload.
 #[repr(C)]
 pub struct MxcfbUpdateData {
     pub update_region: MxcfbRect,
@@ -63,19 +59,12 @@ pub struct MxcfbUpdateData {
     pub flags: u32,
 }
 
-/// Waveform: panel init/clear.
 pub const WAVE_INIT: u32 = 0;
-/// Waveform: direct update (fast, monochrome).
 pub const WAVE_DU: u32 = 1;
-/// Waveform: greyscale clearing (full refresh, flashing).
 pub const WAVE_GC16: u32 = 2;
-/// Waveform: greyscale, low-flash (partial, flash-free).
 pub const WAVE_GL16: u32 = 3;
-/// Waveform: animation (fastest, monochrome only).
 pub const WAVE_A2: u32 = 4;
-/// Waveform: greyscale low-flash with regional update.
 pub const WAVE_GLR16: u32 = 5;
-/// Waveform: greyscale low-flash with dithering.
 pub const WAVE_GLD16: u32 = 6;
 
 /// REAGL (GLR16) on MTK hwtcon devices (Libra/Clara Colour, mt8113).
@@ -91,18 +80,16 @@ pub const WAVE_REAGL_MTK: u32 = 4;
 
 /// Pick the best waveform for a given render scenario on Kaleido 3 color e-ink.
 ///
-/// - `Transition`: panel open/close, chapter overlay toggle. Needs good clearing
-///   to avoid ghosting, but no full flash. `GL16` keeps the swap flash-free;
-///   callers that need stronger clearing on a near-total swap use `WAVE_GC16`
-///   directly (still with a PARTIAL update -- only `update_mode=1` inverts).
-/// - `Content`: regular text page updates. `GL16` has less ghosting on partial
-///   updates than `GC16`, preserving color quality for highlighted text and
-///   the reading cursor.
+/// - `Transition`: panel open/close, chapter overlay toggle. `GL16` keeps
+///   the swap flash-free.
+/// - `Content`: regular page updates including images. `REAGL` (GLR16 on
+///   MTK) applies ghost-suppression that clears anti-aliased figure and
+///   icon edges that `GC16` leaves behind on Kaleido 3.
 /// - `Animation`: spinner, loading bar. `A2` is fastest (monochrome).
 pub fn waveform_for(scenario: RenderScenario) -> u32 {
     match scenario {
         RenderScenario::Transition => WAVE_GL16,
-        RenderScenario::Content => WAVE_GL16,
+        RenderScenario::Content => WAVE_REAGL_MTK,
         RenderScenario::Animation => WAVE_A2,
     }
 }
@@ -127,9 +114,6 @@ pub fn diff_rows(prev: &[u8], cur: &[u8], w: usize, h: usize) -> Option<(usize, 
     let mut dirty = false;
     for y in 0..h {
         let base = y * w * 2;
-        if base + w * 2 > prev.len() || base + w * 2 > cur.len() {
-            break;
-        }
         if prev[base..base + w * 2] != cur[base..base + w * 2] {
             dirty = true;
             if y < min_y {
