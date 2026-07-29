@@ -16,9 +16,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 
-/// A2DP control socket path (AOSP `audio_a2dp_hw`).
 pub const CTRL_PATH: &str = "/tmp/audio.a2dp_ctrl";
-/// A2DP data socket path (PCM bytes).
 pub const DATA_PATH: &str = "/tmp/audio.a2dp_data";
 
 // AOSP audio_a2dp_hw command opcodes (audio_a2dp_hw.h)
@@ -47,10 +45,8 @@ pub enum A2dpError {
 /// The sample format the A1 proof validated on the Havit headset.
 /// (Edge-TTS PCM is 24 kHz mono -> resampled to this by [`crate::pipeline`].)
 pub const TARGET_RATE: usize = 44_100;
-/// Number of output channels (stereo).
 pub const TARGET_CHANNELS: usize = 2;
 
-/// Client of the Android A2DP HAL control + data sockets.
 pub struct AospA2dpSink {
     ctrl: UnixStream,
     data: Option<UnixStream>,

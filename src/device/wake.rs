@@ -76,6 +76,7 @@ pub fn spawn_power_monitor(pressed: Arc<AtomicBool>, exit: Arc<AtomicBool>, powe
                                     }
                                     pressed.store(true, Ordering::SeqCst);
                                     last_press = Some(now);
+                                } else {
                                 }
                                 key_down = true;
                             }

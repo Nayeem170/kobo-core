@@ -9,7 +9,7 @@ use epub::Chapter;
 /// code when a non-Latin script makes up >= 10% of letters, so a stray foreign
 /// quote in an English book does not mis-detect.
 pub fn detect_language(chapters: &[Chapter]) -> Option<String> {
-    const DETECT_LANGUAGE_BUDGET_BYTES: usize = 262_144;
+    const BUDGET: usize = 262_144;
     let mut bn = 0u32;
     let mut ar = 0u32;
     let mut letters = 0u32;
@@ -29,11 +29,11 @@ pub fn detect_language(chapters: &[Chapter]) -> Option<String> {
                 _ => {}
             }
             scanned += c.len_utf8().max(1);
-            if scanned >= DETECT_LANGUAGE_BUDGET_BYTES {
+            if scanned >= BUDGET {
                 break;
             }
         }
-        if scanned >= DETECT_LANGUAGE_BUDGET_BYTES {
+        if scanned >= BUDGET {
             break;
         }
     }

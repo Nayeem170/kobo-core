@@ -4,8 +4,6 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::device::paths;
-
 const WAKE_LOCK_PATH: &str = "/sys/power/wake_lock";
 const WAKE_UNLOCK_PATH: &str = "/sys/power/wake_unlock";
 const WAKE_LOCK_NAME: &str = "dev_probe";
@@ -52,7 +50,7 @@ pub fn frontlight_path(fl_cfg: &crate::device::config::FrontlightConfig) -> Opti
         return Some(known);
     }
     let mut candidates: Vec<(PathBuf, u32)> = Vec::new();
-    for entry in fs::read_dir(paths::BACKLIGHT_DIR).ok()?.flatten() {
+    for entry in fs::read_dir("/sys/class/backlight").ok()?.flatten() {
         let path = entry.path().join("brightness");
         if path.exists() {
             if let Some(val) = frontlight_get(&path) {
@@ -128,7 +126,7 @@ pub fn restore_frontlight(path: &Path, brightness: u32) {
 #[allow(dead_code)]
 pub fn kernel_suspend(state: &str) {
     // best-effort: write may fail if the kernel rejects the requested state
-    let _ = fs::write(paths::SUSPEND_STATE, state);
+    let _ = fs::write("/sys/power/state", state);
 }
 
 #[cfg(test)]

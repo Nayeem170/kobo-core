@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::task::JoinHandle;
 
-/// Headless player stub: drives a shared clock with a fake ticker, no audio.
 pub struct StubPlayer {
     clock: SharedClock,
     playing: Arc<AtomicBool>,
@@ -29,7 +28,6 @@ pub struct StubPlayer {
 }
 
 impl StubPlayer {
-    /// Create a stopped player with a fresh shared clock.
     pub fn new() -> Self {
         StubPlayer {
             clock: SharedClock::new(),
@@ -131,14 +129,6 @@ impl StubPlayer {
 impl Default for StubPlayer {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Drop for StubPlayer {
-    fn drop(&mut self) {
-        if let Some(task) = self.task.take() {
-            task.abort();
-        }
     }
 }
 

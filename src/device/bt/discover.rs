@@ -15,6 +15,8 @@ pub struct PairedDevice {
 
 static CACHED_BT_DEVICE: Mutex<Option<String>> = Mutex::new(None);
 
+static LAST_OK_DEVICE: Mutex<Option<String>> = Mutex::new(None);
+
 fn get_cached_bt_device() -> Option<String> {
     CACHED_BT_DEVICE.lock().ok().and_then(|g| g.clone())
 }
@@ -29,6 +31,16 @@ pub(super) fn clear_cached_bt_device() {
     if let Ok(mut guard) = CACHED_BT_DEVICE.lock() {
         *guard = None;
     }
+}
+
+pub(super) fn set_last_ok_device(dev: &str) {
+    if let Ok(mut guard) = LAST_OK_DEVICE.lock() {
+        *guard = Some(dev.to_string());
+    }
+}
+
+fn get_last_ok_device() -> Option<String> {
+    LAST_OK_DEVICE.lock().ok().and_then(|g| g.clone())
 }
 
 fn parse_managed_objects(text: &str) -> Vec<PairedDevice> {
@@ -102,7 +114,8 @@ pub fn discover_paired_devices() -> Vec<PairedDevice> {
         Err(_) => return Vec::new(),
     };
     let text = String::from_utf8_lossy(&out.stdout);
-    parse_managed_objects(&text)
+    let result = parse_managed_objects(&text);
+    result
 }
 
 pub(super) fn discover_connected_paired_device() -> Option<String> {
@@ -113,9 +126,9 @@ pub(super) fn discover_connected_paired_device() -> Option<String> {
 }
 
 /// The BT device to connect/query: a device already connected by btservice
-/// (preferred), then the configured default, then the first paired device.
-/// Cached for the session; the cache is cleared on BT power-off so the next
-/// power-on re-resolves with live connected state.
+/// (preferred), then the last known good device, then the configured default,
+/// then the first paired device. Cached for the session; the cache is cleared
+/// on BT power-off so the next power-on re-resolves with live connected state.
 pub fn bt_target_device() -> Option<String> {
     if let Some(d) = get_cached_bt_device() {
         return Some(d);
@@ -125,6 +138,7 @@ pub fn bt_target_device() -> Option<String> {
         .iter()
         .find(|d| d.connected)
         .map(|d| d.path.clone())
+        .or_else(|| get_last_ok_device())
         .or_else(|| {
             fs::read_to_string(crate::device::paths::BT_CONFIG_FILE)
                 .ok()

@@ -1,26 +1,17 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Nayeem Bin Ahsan
-#[cfg(feature = "reader")]
 use super::{word_wrap_bytes, word_wrap_char_based_styled};
-#[cfg(feature = "reader")]
 use crate::rendering::text_render;
 
 #[derive(Debug, Clone, Copy)]
-/// Page-layout geometry shared by pagination and row-height estimation.
 pub struct ScreenLayout {
-    /// Usable text column width in px.
     pub text_w: usize,
-    /// Usable content height in px.
     pub content_h: i32,
-    /// Heading row height in px.
     pub heading_h: i32,
-    /// Gap below a heading before body text, in px.
     pub heading_gap: i32,
-    /// Gap between paragraphs, in px.
     pub para_gap: i32,
 }
 
-/// Indent in px for a block element at `indent_em` in the `body_px` face.
 pub fn block_indent_for(indent_em: f32, body_px: f32, text_w: usize) -> usize {
     if indent_em <= 0.0 {
         return 0;
@@ -30,8 +21,6 @@ pub fn block_indent_for(indent_em: f32, body_px: f32, text_w: usize) -> usize {
     ((indent_em * body_px) as usize).min(max)
 }
 
-/// Cumulative page offsets per chapter (rough estimate from char counts).
-#[cfg(feature = "reader")]
 pub fn estimate_chapter_offsets(
     chapters: &[crate::formats::epub::Chapter],
     current: (usize, usize),
@@ -39,7 +28,7 @@ pub fn estimate_chapter_offsets(
     layout: &ScreenLayout,
 ) -> Vec<usize> {
     let chars_per_line = (layout.text_w as f32 / (line_h as f32 * 0.6)) as usize;
-    let lines_per_page = (layout.content_h / line_h.max(1)) as usize;
+    let lines_per_page = (layout.content_h / line_h) as usize;
     let chars_per_page = chars_per_line * lines_per_page;
     let mut offsets = vec![0usize; chapters.len() + 1];
     for (i, ch) in chapters.iter().enumerate() {
@@ -53,8 +42,6 @@ pub fn estimate_chapter_offsets(
     offsets
 }
 
-/// Page count for one chapter after laying out rows and paginating them.
-#[cfg(feature = "reader")]
 pub fn count_chapter_pages(
     chapter: &mut crate::formats::epub::Chapter,
     body_px: f32,

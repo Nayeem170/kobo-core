@@ -5,7 +5,6 @@ use rustybuzz::UnicodeBuffer;
 use super::detect_script;
 use super::fonts::{fallback_for_char, font_for, glyph_cache, TextStyle};
 
-/// Blit `text` in black (0x0000) into an RGB565 framebuffer.
 pub fn blit_rgb565(
     buf: &mut [u8],
     buf_stride: usize,
@@ -37,7 +36,6 @@ fn bold_smear(px_size: f32) -> usize {
     ((px_size / 22.0).round() as usize).max(1)
 }
 
-/// Blit `text` in `color` (RGB565) into an RGB565 framebuffer.
 pub fn blit_rgb565_color(
     buf: &mut [u8],
     buf_stride: usize,
