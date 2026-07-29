@@ -221,7 +221,11 @@ pub fn extract_with_style(xhtml: &str, style: &BookStyle) -> (String, Vec<TextSe
                         tag,
                         id,
                         src: elem.value().attr("src").map(|s| s.to_string()),
-                        caption: None,
+                        caption: elem
+                            .value()
+                            .attr("alt")
+                            .map(|a| a.split_whitespace().collect::<Vec<_>>().join(" "))
+                            .filter(|a| !a.is_empty()),
                         indent: 0.0,
                         styles: Vec::new(),
                         list: None,
@@ -436,7 +440,14 @@ fn extract_figure_segment(
                 .collect::<Vec<_>>()
                 .join(" ")
         })
-        .filter(|c| !c.is_empty());
+        .filter(|c| !c.is_empty())
+        .or_else(|| {
+            elem.select(img_sel)
+                .next()
+                .and_then(|i| i.value().attr("alt"))
+                .map(|a| a.split_whitespace().collect::<Vec<_>>().join(" "))
+                .filter(|a| !a.is_empty())
+        });
     // A figure with neither a picture nor a caption has nothing to show.
     if src.is_none() && cap.is_none() {
         return None;

@@ -85,10 +85,8 @@ pub fn lines(text: &str, max_chars: usize) -> Vec<Line> {
 /// (`. ! ?`) strictly before that offset. Used to map a line's start (and a
 /// WordMark's offset) to a sentence for the left-accent highlight.
 pub fn sentence_index_at(text: &str, byte_offset: usize) -> usize {
-    text.char_indices()
-        .take_while(|(b, c)| *b + c.len_utf8() <= byte_offset)
-        .filter(|(_, c)| matches!(c, '.' | '!' | '?'))
-        .count()
+    let upto = byte_offset.min(text.len());
+    text[..upto].matches(['.', '!', '?']).count()
 }
 
 #[cfg(test)]

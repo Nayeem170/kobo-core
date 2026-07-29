@@ -87,9 +87,6 @@ pub fn loading_bar_rect(screen_w: i32, screen_h: i32) -> Rect {
 /// Averaging every source pixel that lands in a destination cell preserves
 /// thin strokes as continuous grey rather than flickering fragments.
 pub fn box_downscale(src: &[u8], sw: usize, sh: usize, dw: usize, dh: usize) -> Vec<u8> {
-    if src.len() < sw * sh * 3 {
-        return Vec::new();
-    }
     let mut out = vec![0u8; dw * dh * 3];
     for dy in 0..dh {
         let y0 = dy * sh / dh;

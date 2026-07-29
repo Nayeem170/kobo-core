@@ -23,7 +23,6 @@ impl Default for SharedClock {
 }
 
 impl SharedClock {
-    /// Create a clock positioned at the start of playback.
     pub fn new() -> Self {
         Self(Arc::new(AtomicU64::new(0)))
     }

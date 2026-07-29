@@ -169,6 +169,17 @@ fn decode_image_returns_correct_dimensions() {
 }
 
 #[test]
+fn decode_image_does_not_upscale() {
+    let img = image::DynamicImage::new_rgb8(48, 48);
+    let mut buf = Vec::new();
+    img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+        .unwrap();
+    let decoded = decode_image(&buf, 976, 976).unwrap();
+    assert_eq!(decoded.width, 48, "small image must not be upscaled to max_w");
+    assert_eq!(decoded.height, 48);
+}
+
+#[test]
 fn decode_image_caps_height() {
     let img = image::DynamicImage::new_rgb8(10, 200);
     let mut buf = Vec::new();
@@ -371,7 +382,15 @@ fn style_bits_are_distinct() {
     for bold in [false, true] {
         for italic in [false, true] {
             for mono in [false, true] {
-                assert!(seen.insert(TextStyle { bold, italic, mono, link: false }.bits()));
+                assert!(seen.insert(
+                    TextStyle {
+                        bold,
+                        italic,
+                        mono,
+                        link: false
+                    }
+                    .bits()
+                ));
             }
         }
     }

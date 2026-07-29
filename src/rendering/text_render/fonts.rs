@@ -58,7 +58,10 @@ impl TextStyle {
 
     /// Compact key for the width cache.
     pub(crate) fn bits(self) -> u8 {
-        (self.bold as u8) | ((self.italic as u8) << 1) | ((self.mono as u8) << 2) | ((self.link as u8) << 3)
+        (self.bold as u8)
+            | ((self.italic as u8) << 1)
+            | ((self.mono as u8) << 2)
+            | ((self.link as u8) << 3)
     }
 }
 

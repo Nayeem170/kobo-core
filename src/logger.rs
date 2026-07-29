@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Nayeem Bin Ahsan
-/// Re-export of the persistent log file path.
 pub use crate::device::paths::KLOG;
 
-/// File logger that appends timestamped lines to [`KLOG`].
 pub struct FileLogger;
 impl log::Log for FileLogger {
     fn log(&self, record: &log::Record) {

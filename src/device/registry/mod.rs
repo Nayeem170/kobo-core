@@ -5,12 +5,11 @@ pub mod mtk;
 pub mod nxp;
 
 use super::config::{DeviceConfig, FrontlightConfig};
-use crate::device::paths::MXC_BRIGHTNESS_PATH;
 use std::sync::LazyLock;
 
 pub(super) fn fl_mxc() -> FrontlightConfig {
     FrontlightConfig {
-        brightness_path: MXC_BRIGHTNESS_PATH.into(),
+        brightness_path: "/sys/class/backlight/mxc_msp430.0/brightness".into(),
         mixer_path: None,
         nl_min: 0,
         nl_max: 10,
@@ -30,7 +29,7 @@ pub(super) fn fl_mxc_lm3630a() -> FrontlightConfig {
 
 pub(super) fn fl_mxc_aw99703(inverted: bool) -> FrontlightConfig {
     FrontlightConfig {
-        brightness_path: MXC_BRIGHTNESS_PATH.into(),
+        brightness_path: "/sys/class/backlight/mxc_msp430.0/brightness".into(),
         mixer_path: Some("/sys/class/leds/aw99703-bl_FL1/color".into()),
         nl_min: 0,
         nl_max: 10,
@@ -40,7 +39,7 @@ pub(super) fn fl_mxc_aw99703(inverted: bool) -> FrontlightConfig {
 
 pub(super) fn fl_mxc_tlc5947() -> FrontlightConfig {
     FrontlightConfig {
-        brightness_path: MXC_BRIGHTNESS_PATH.into(),
+        brightness_path: "/sys/class/backlight/mxc_msp430.0/brightness".into(),
         mixer_path: Some("/sys/class/backlight/tlc5947_bl/color".into()),
         nl_min: 0,
         nl_max: 10,

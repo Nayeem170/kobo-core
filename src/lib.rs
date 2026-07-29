@@ -19,7 +19,7 @@ pub use capabilities::{Capabilities, MockCapabilities};
 pub use clock::{highlight_index, SharedClock};
 
 #[cfg(feature = "reader")]
-pub use formats::epub::{Chapter, EpubBook, EpubError};
+pub use formats::epub::{Chapter, EpubBook, EpubError, TocEntry};
 #[cfg(feature = "reader")]
 pub use html_text::TextSegment;
 

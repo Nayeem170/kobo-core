@@ -10,35 +10,27 @@
 /// device queries through this trait lets the reader's status-refresh and
 /// play-enabled decisions be unit-tested without hardware.
 pub trait Capabilities {
-    /// Whether a network connection is available.
     fn network_available(&self) -> bool;
-    /// Whether an audio sink (A2DP) is available for playback.
     fn audio_sink_available(&self) -> bool;
 
-    /// Read-aloud is available when both network and audio sink are present.
     fn read_aloud_available(&self) -> bool {
         self.network_available() && self.audio_sink_available()
     }
 
-    /// Battery charge percentage (0-100), 0 when unknown.
     fn battery_pct(&self) -> i32 {
         0
     }
-    /// Connected Wi-Fi SSID, if any.
     fn wifi_name(&self) -> Option<String> {
         None
     }
-    /// Connected Bluetooth device name, if any.
     fn bt_name(&self) -> Option<String> {
         None
     }
-    /// Current wall-clock time as a short string for the status bar.
     fn current_clock(&self) -> String {
         "--:--".to_string()
     }
 }
 
-/// Scripted `Capabilities` impl for the desktop simulator.
 #[derive(Debug, Clone, Default)]
 pub struct MockCapabilities {
     pub network: bool,

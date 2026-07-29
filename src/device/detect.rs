@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use log::{info, warn};
 
-use crate::device::paths;
+use crate::device::paths::VERSION_FILE;
 
 use crate::device::config::{
     detect_from_codename, lookup_device, parse_input_devices, DeviceConfig, InputDevices, SocFamily,
@@ -20,7 +20,7 @@ fn product_from_env() -> Option<String> {
 }
 
 fn product_from_kobo_config() -> Option<String> {
-    let output = std::process::Command::new(paths::KOBO_CONFIG_SH)
+    let output = std::process::Command::new("/bin/kobo_config.sh")
         .output()
         .ok()?;
     if output.status.success() {
@@ -33,7 +33,7 @@ fn product_from_kobo_config() -> Option<String> {
 }
 
 fn product_from_version() -> Option<String> {
-    let content = fs::read_to_string(paths::VERSION_FILE).ok()?;
+    let content = fs::read_to_string(VERSION_FILE).ok()?;
     let last_line = content.lines().last()?.trim();
     let parts: Vec<&str> = last_line.split(',').collect();
     let version = parts.last()?.trim();
@@ -89,23 +89,26 @@ pub fn detect_device() -> Option<DeviceConfig> {
 }
 
 pub fn scan_input_devices() -> Option<InputDevices> {
-    let input_dir = PathBuf::from(paths::INPUT_DEV_DIR);
+    let input_dir = PathBuf::from("/dev/input");
     if !input_dir.exists() {
         warn!("hw: /dev/input does not exist");
         return None;
     }
-    let content = fs::read_to_string(paths::INPUT_DEVICES_PROC).ok()?;
+    let content = fs::read_to_string("/proc/bus/input/devices").ok()?;
     let (mut touch_path, mut power_path) = parse_input_devices(&content);
+    log::info!("hw: parse_input_devices raw: touch={:?} power={:?}", touch_path, power_path);
     if touch_path.is_none() {
-        let ev1 = PathBuf::from(paths::TOUCH_DEV);
+        let ev1 = PathBuf::from("/dev/input/event1");
         if ev1.exists() {
-            touch_path = Some(paths::TOUCH_DEV.to_string());
+            touch_path = Some("/dev/input/event1".into());
+            log::info!("hw: touch fallback to event1");
         }
     }
     if power_path.is_none() {
-        let ev2 = PathBuf::from(paths::POWER_DEV);
+        let ev2 = PathBuf::from("/dev/input/event2");
         if ev2.exists() {
-            power_path = Some(paths::POWER_DEV.to_string());
+            power_path = Some("/dev/input/event2".into());
+            log::info!("hw: power fallback to event2");
         }
     }
     match (touch_path, power_path) {

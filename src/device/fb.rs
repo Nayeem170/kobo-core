@@ -8,7 +8,6 @@
 //! `rgb565_as_bytes_ref` helper to convert from `&[Rgb565Pixel]` at the
 //! call site.
 
-use crate::device::paths;
 use crate::rendering::eink::{
     FbFixScreeninfo, FbVarScreeninfo, MxcfbRect, MxcfbUpdateData, FBIOGET_FSCREENINFO,
     FBIOGET_VSCREENINFO, MXCFB_SEND_UPDATE,
@@ -17,10 +16,6 @@ use log::{info, warn};
 
 const UPDATE_MARKER: u32 = 1;
 const WAIT_FALLBACK_MS: u64 = 400;
-const MXCFB_TEMP_AMBIENT: u32 = 0x1000;
-const UPDATE_MODE_PARTIAL: u32 = 0;
-const UPDATE_MODE_FULL: u32 = 1;
-const ALPHA_OPAQUE: u8 = 0xff;
 
 #[derive(Debug, Clone, Copy)]
 pub struct UpdateRegion {
@@ -31,9 +26,6 @@ pub struct UpdateRegion {
 }
 
 pub fn dump_ppm(path: &str, buf: &[u8], w: usize, h: usize) {
-    if buf.len() < w * h * 2 {
-        return;
-    }
     let mut out = Vec::with_capacity(15 + w * h * 3);
     out.extend_from_slice(format!("P6\n{} {}\n255\n", w, h).as_bytes());
     for i in 0..w * h {
@@ -47,7 +39,7 @@ pub fn dump_ppm(path: &str, buf: &[u8], w: usize, h: usize) {
         out.push((b << 3) | (b >> 2));
     }
     match std::fs::write(path, &out) {
-        Ok(_) => {}
+        Ok(_) => (),
         Err(e) => warn!("PPM write err: {}", e),
     }
 }
@@ -72,7 +64,7 @@ impl Fb {
         let file = std::fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(paths::FRAMEBUFFER_DEV)
+            .open("/dev/fb0")
             .ok()?;
         let fd = file.as_raw_fd();
         let mut var = FbVarScreeninfo::default();
@@ -140,11 +132,8 @@ impl Fb {
     /// white, so a full-width band would flatten anything colourful sharing those
     /// rows. Bounding the region horizontally keeps the waveform on the animated
     /// area alone.
-    pub fn present_rect(&self, buf: &[u8], w: usize, h: usize, rect: &UpdateRegion, waveform: u32) {
-        let expected = w * h * 2;
-        if buf.len() < expected {
-            return;
-        }
+    pub fn present_rect(&self, buf: &[u8], w: usize, h: usize,
+        rect: &UpdateRegion, waveform: u32, full: bool) {
         let x0 = rect.x.min(self.xres);
         let y0 = rect.y.min(self.yres);
         let x1 = (rect.x + rect.w).min(w).min(self.xres);
@@ -172,7 +161,7 @@ impl Fb {
                         fb[off + (self.r_off / 8) as usize] = r;
                         fb[off + (self.g_off / 8) as usize] = g;
                         fb[off + (self.b_off / 8) as usize] = b;
-                        fb[off + 3] = ALPHA_OPAQUE;
+                        fb[off + 3] = 0xff;
                     }
                     16 => {
                         fb[off] = (pix & 0xff) as u8;
@@ -203,9 +192,9 @@ impl Fb {
                 height: (y1 - y0) as u32,
             },
             waveform_mode: waveform,
-            update_mode: UPDATE_MODE_PARTIAL,
+            update_mode: if full { 1 } else { 0 },
             update_marker: UPDATE_MARKER,
-            temp: MXCFB_TEMP_AMBIENT,
+            temp: 0x1000,
             flags: 0,
         };
         // SAFETY: MXCFB_SEND_UPDATE reads one initialized #[repr(C)]
@@ -225,10 +214,6 @@ impl Fb {
         rh: usize,
         waveform: u32,
     ) {
-        let expected = w * h * 2;
-        if buf.len() < expected {
-            return;
-        }
         // SAFETY: self.ptr is the mmap'd framebuffer of length self.map_len (set in open(),
         // unmapped in Drop). We hold &self (shared) but only write fb pixels here - no other
         // aliasing byte slice of this mapping is live concurrently. The slice length is exactly
@@ -236,7 +221,7 @@ impl Fb {
         let fb = unsafe { std::slice::from_raw_parts_mut(self.ptr, self.map_len) };
         let bpp = self.bpp;
         let stride = self.stride;
-        let (y0, y1) = if full {
+        let (y0, y1) = if full && top == 0 && rh == 0 {
             (0, h.min(self.yres))
         } else {
             let end = (top + rh).min(h).min(self.yres);
@@ -258,7 +243,7 @@ impl Fb {
                         fb[off + (self.r_off / 8) as usize] = r;
                         fb[off + (self.g_off / 8) as usize] = g;
                         fb[off + (self.b_off / 8) as usize] = b;
-                        fb[off + 3] = ALPHA_OPAQUE;
+                        fb[off + 3] = 0xff;
                     }
                     16 => {
                         fb[off] = (px & 0xff) as u8;
@@ -288,13 +273,9 @@ impl Fb {
                 height: (y1 - y0) as u32,
             },
             waveform_mode: waveform,
-            update_mode: if full {
-                UPDATE_MODE_FULL
-            } else {
-                UPDATE_MODE_PARTIAL
-            },
+            update_mode: if full { 1 } else { 0 },
             update_marker: UPDATE_MARKER,
-            temp: MXCFB_TEMP_AMBIENT,
+            temp: 0x1000,
             flags: 0,
         };
         // SAFETY: MXCFB_SEND_UPDATE ioctl reads one #[repr(C)] MxcfbUpdateData from the &upd

@@ -5,10 +5,8 @@
 
 use std::fs;
 
-use crate::device::paths;
-
 pub fn battery_pct() -> i32 {
-    if let Ok(entries) = fs::read_dir(paths::POWER_SUPPLY_DIR) {
+    if let Ok(entries) = fs::read_dir("/sys/class/power_supply") {
         for entry in entries.flatten() {
             let dir = entry.path();
             let is_battery = fs::read_to_string(dir.join("type"))

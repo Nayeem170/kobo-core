@@ -45,7 +45,6 @@ pub fn init_ppi(w: usize, h: usize) {
     PPI.store(ppi_for(w, h), Ordering::Relaxed);
 }
 
-/// Current latched panel density in ppi.
 pub fn ppi() -> usize {
     PPI.load(Ordering::Relaxed)
 }

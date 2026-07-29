@@ -21,7 +21,6 @@ use std::time::{Duration, Instant};
 use log::info;
 
 use crate::device::input::{decode_input_event, EV_KEY};
-use crate::device::paths;
 
 pub const KEY_VOLUMEDOWN: u16 = 114;
 pub const KEY_VOLUMEUP: u16 = 115;
@@ -181,7 +180,6 @@ impl Monitor {
                 revents: 0,
             })
             .collect();
-        // SAFETY: pfds is a local Vec of initialized pollfd backed by self open fds; poll only writes revents; nfds matches pfds.len().
         let n = unsafe {
             libc::poll(
                 pfds.as_mut_ptr(),
@@ -315,7 +313,7 @@ fn refresh_devices(
     error_counts.retain(|k, _| std::path::Path::new(k).exists());
 
     let mut current: HashSet<String> = HashSet::new();
-    if let Ok(entries) = std::fs::read_dir(paths::INPUT_DEV_DIR) {
+    if let Ok(entries) = std::fs::read_dir("/dev/input") {
         for entry in entries.flatten() {
             if !entry.file_name().to_string_lossy().starts_with("event") {
                 continue;
@@ -331,18 +329,20 @@ fn refresh_devices(
         if already.contains(path) || skip_devs.iter().any(|s| s == path) {
             continue;
         }
-        if let Ok(f) = std::fs::OpenOptions::new().read(true).open(path) {
-            let fd = f.as_raw_fd();
-            // SAFETY: fd is the raw fd of the just-opened owned File f; F_GETFL/F_SETFL read/write an int flags word on this descriptor only.
-            unsafe {
-                let flags = libc::fcntl(fd, libc::F_GETFL);
-                libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        match std::fs::OpenOptions::new().read(true).open(path) {
+            Ok(f) => {
+                let fd = f.as_raw_fd();
+                unsafe {
+                    let flags = libc::fcntl(fd, libc::F_GETFL);
+                    libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+                }
+                info!("media-keys: opened {}", path);
+                open.push(MediaDevice {
+                    path: path.clone(),
+                    file: f,
+                });
             }
-            info!("media-keys: opened {}", path);
-            open.push(MediaDevice {
-                path: path.clone(),
-                file: f,
-            });
+            Err(_) => {}
         }
     }
 }

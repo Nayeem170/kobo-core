@@ -5,7 +5,7 @@
 //! mtk.bluedroid DBus interaction lives here.
 
 use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -19,13 +19,41 @@ pub use discover::bt_target_device;
 pub use discover::PairedDevice;
 use discover::{
     clear_cached_bt_device, discover_connected_paired_device, discover_paired_devices,
-    set_cached_bt_device,
+    set_cached_bt_device, set_last_ok_device,
 };
 
 /// Wall-clock millis of the last user-initiated BT toggle. The UI status refresh
 /// uses `bt_toggle_age_ms` to avoid reverting the pill to "off" while an async
 /// connect (which can take several seconds + retries) is still in flight.
 static LAST_BT_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
+
+/// Prevents multiple reconnect_bt threads from running concurrently. Each
+/// bt_toggle(true) spawns a new thread; without this guard, repeated toggles
+/// (wake + mode switch + panel taps) launch parallel Connect calls to
+/// different devices, which confuses the BT stack.
+static RECONNECT_BUSY: AtomicU8 = AtomicU8::new(0);
+
+/// Tri-state result from the last reconnect_bt run. Consumed by the main loop
+/// so `bt_on` reflects the outcome immediately on both success and failure,
+/// instead of waiting for the grace period to expire.
+/// 0 = idle, 1 = connected, 2 = failed
+static BT_RECONNECT_RESULT: AtomicU8 = AtomicU8::new(0);
+
+/// Returns the reconnect result since the last call, then resets to idle.
+/// 0 = nothing happened, 1 = connected, 2 = gave up
+pub fn bt_take_reconnect_result() -> u8 {
+    BT_RECONNECT_RESULT.swap(0, Ordering::Relaxed)
+}
+
+/// True while a `reconnect_bt` thread is actively retrying. Status refreshes
+/// key off this (not a fixed timeout) so the pill never flickers back to
+/// "off" mid-connect no matter how long the real handshake takes -- a single
+/// Device1.Connect attempt blocks for as long as the BT stack needs, so a
+/// fixed grace window can expire while a connect is still genuinely in
+/// flight.
+pub fn bt_reconnect_busy() -> bool {
+    RECONNECT_BUSY.load(Ordering::SeqCst) != 0
+}
 
 fn now_ms() -> u64 {
     SystemTime::now()
@@ -72,11 +100,6 @@ pub fn bt_bus() -> &'static str {
     BT_BUS.get().copied().unwrap_or(BT_BUS_MTK)
 }
 
-/// One-time BT diagnostic at startup: log the bus, whether nickel's BT config
-/// exists, and the paired default audio device. This pins down whether a failed
-/// toggle is "no paired device configured" vs "connect call failing".
-pub fn log_bt_diagnostics() {}
-
 const DBUS_DEVICE1_IFACE: &str = "string:org.bluez.Device1";
 const DBUS_ADAPTER1_IFACE: &str = "string:org.bluez.Adapter1";
 const DBUS_PROPS_GET: &str = "org.freedesktop.DBus.Properties.Get";
@@ -85,12 +108,6 @@ const DBUS_DEVICE1_PATH: &str = "/org/bluez/hci0";
 pub(super) const DBUS_OBJECT_MANAGER: &str = "org.freedesktop.DBus.ObjectManager.GetManagedObjects";
 const DBUS_DEVICE1_CONNECT: &str = "org.bluez.Device1.Connect";
 const DBUS_DEVICE1_DISCONNECT: &str = "org.bluez.Device1.Disconnect";
-
-const RECONNECT_LEAD_MS: u64 = 800;
-const CONNECT_LEAD_MS: u64 = 500;
-const CONNECT_RETRY_INTERVAL_MS: u64 = 1500;
-const RECONNECT_MAX_ATTEMPTS: u32 = 6;
-const CONNECT_MAX_ATTEMPTS: u32 = 4;
 
 /// Returns a `dbus-send` Command pre-configured with the detected BT bus name.
 pub(super) fn dbus_cmd() -> Command {
@@ -119,6 +136,7 @@ pub fn bt_status() -> bool {
         None => return false,
     };
     if device_connected(&dev) {
+        set_last_ok_device(&dev);
         return true;
     }
     if let Some(connected) = discover_connected_paired_device() {
@@ -128,8 +146,10 @@ pub fn bt_status() -> bool {
                 dev, connected
             );
             set_cached_bt_device(&connected);
+            set_last_ok_device(&connected);
             return true;
         }
+        set_last_ok_device(&connected);
     }
     false
 }
@@ -209,36 +229,46 @@ pub fn bt_toggle(on: bool) {
 }
 
 pub fn reconnect_bt() {
-    // Resolve the target device: configured default, else a paired device
-    // discovered on the adapter (the config key is absent on newer firmware /
-    // after a factory reset). Without this, KoThok had nothing to connect to.
-    let dev = match bt_target_device() {
-        Some(d) => d,
-        None => {
-            info!("reconnect_bt: no paired device found on adapter, nothing to connect");
-            return;
+    if RECONNECT_BUSY.swap(1, Ordering::SeqCst) != 0 {
+        info!("reconnect_bt: already running, skipping");
+        return;
+    }
+    let mut dev: Option<String> = None;
+    info!("reconnect_bt: connecting on bus={}", bt_bus());
+    for attempt in 1..=15 {
+        if dev.is_none() {
+            dev = bt_target_device();
+            if dev.is_none() {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                continue;
+            }
         }
-    };
-    info!("reconnect_bt: connecting {dev} on bus={}", bt_bus());
-    // The adapter was just powered on; the first Connect issued immediately
-    // after power-up frequently fails (the stack needs a moment to settle). A
-    // short lead delay plus a bounded retry loop makes a single ON tap reliably
-    // connect, instead of forcing the user to tap repeatedly.
-    std::thread::sleep(std::time::Duration::from_millis(RECONNECT_LEAD_MS));
-    for _ in 1..=RECONNECT_MAX_ATTEMPTS {
-        // best-effort: Connect's exit code is unreliable right after power-on; bt_status() below is the real signal
+        let dev_str = dev.as_ref().unwrap();
         let _ = dbus_cmd()
-            .args([&dev, DBUS_DEVICE1_CONNECT])
+            .args([dev_str, DBUS_DEVICE1_CONNECT])
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .status();
         let connected = bt_status();
         if connected {
+            info!("reconnect_bt: connected on attempt {attempt}");
+            BT_RECONNECT_RESULT.store(1, Ordering::Relaxed);
+            RECONNECT_BUSY.store(0, Ordering::SeqCst);
             return;
         }
-        std::thread::sleep(std::time::Duration::from_millis(CONNECT_RETRY_INTERVAL_MS));
+        if attempt == 5 {
+            if let Some(d) = bt_target_device() {
+                if Some(&d) != dev.as_ref() {
+                    info!("reconnect_bt: switching target {:?} -> {d}", dev);
+                    dev = Some(d);
+                }
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(400));
     }
-    info!("reconnect_bt: gave up after {RECONNECT_MAX_ATTEMPTS} attempts ({dev})");
+    info!("reconnect_bt: gave up after 15 attempts");
+    BT_RECONNECT_RESULT.store(2, Ordering::Relaxed);
+    RECONNECT_BUSY.store(0, Ordering::SeqCst);
 }
 
 pub fn bt_name() -> Option<String> {
@@ -311,6 +341,17 @@ pub fn bt_list_devices() -> Vec<BtDeviceInfo> {
         .collect()
 }
 
+/// Pins the BT target device without spawning a connect thread. Callers that
+/// are about to trigger `bt_toggle(true)` (which spawns `reconnect_bt`) use
+/// this to steer that reconnect at a specific device instead of letting it
+/// fall back to cached/last-known/default -- avoids running a second,
+/// unguarded connect loop (`bt_connect_device`) in parallel with
+/// `reconnect_bt`, which was hammering the same device with concurrent
+/// Connect calls.
+pub fn bt_set_target_device(path: &str) {
+    set_cached_bt_device(path);
+}
+
 pub fn bt_connect_device(path: &str) {
     info!("bt: switching to device {path}");
     if let Some(current) = bt_target_device() {
@@ -326,9 +367,8 @@ pub fn bt_connect_device(path: &str) {
     set_cached_bt_device(path);
     let path = path.to_string();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(CONNECT_LEAD_MS));
-        for _ in 1..=CONNECT_MAX_ATTEMPTS {
-            // best-effort: Connect's exit code is ignored; device_connected() below is the real signal
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        for _ in 1..=4 {
             let _ = dbus_cmd()
                 .args([&path, DBUS_DEVICE1_CONNECT])
                 .stdout(Stdio::null())
@@ -338,9 +378,9 @@ pub fn bt_connect_device(path: &str) {
             if connected {
                 return;
             }
-            std::thread::sleep(std::time::Duration::from_millis(CONNECT_RETRY_INTERVAL_MS));
+            std::thread::sleep(std::time::Duration::from_millis(1500));
         }
-        info!("bt_connect_device: gave up after {CONNECT_MAX_ATTEMPTS} attempts ({path})");
+        info!("bt_connect_device: gave up after 4 attempts ({path})");
     });
 }
 

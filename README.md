@@ -12,7 +12,7 @@ Part of the **KoThok e-reader ecosystem**:
 
 | Repo | Role |
 |---|---|
-| **KoThok (EReader)** ([Wiki](https://github.com/Nayeem170/KoThok/wiki)) | E-reader app built on kobo-core |
+| **KoThok (EReader)** | E-reader app built on kobo-core |
 | [**kobo-core**](https://crates.io/crates/kobo-core) (this) | Device SDK (framebuffer, touch, audio, EPUB) |
 | [**kothok-edge-tts**](https://crates.io/crates/kothok-edge-tts) | Edge TTS client (re-exported via the audio feature) |
 
@@ -184,7 +184,7 @@ cross build --target armv7-unknown-linux-musleabihf --release
 ## Related projects
 
 - **KoThok (EReader)**: the e-reader app built on this SDK
-- [**kothok-edge-tts**](https://crates.io/crates/kothok-edge-tts) ([Wiki](https://github.com/Nayeem170/kothok-edge-tts/wiki)): Microsoft
+- [**kothok-edge-tts**](https://crates.io/crates/kothok-edge-tts): Microsoft
   Edge TTS client (re-exported via the `audio` feature)
 
 ## License

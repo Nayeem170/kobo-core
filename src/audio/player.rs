@@ -98,7 +98,6 @@ pub enum PlayerError {
     Pipeline(String),
 }
 
-/// Streaming Read Aloud audio player: writes PCM to the A2DP sink with a pausable clock.
 pub struct Player {
     sink: AospA2dpSink,
     started_at: Option<Instant>,

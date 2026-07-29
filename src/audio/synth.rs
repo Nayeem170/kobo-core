@@ -89,6 +89,7 @@ pub async fn synthesize_prepared(
                 continue;
             }
         };
+
         let complete = events.iter().any(|e| matches!(e, TtsEvent::TurnEnd));
         if !complete {
             last_err = Some("synth: truncated (no turn.end marker - network drop)".into());
