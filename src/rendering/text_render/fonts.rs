@@ -198,6 +198,20 @@ pub fn has_font_for(script: Script) -> bool {
         .unwrap_or(false)
 }
 
+/// Distance from the top of the line box to the baseline, for `script`.
+///
+/// Public because a caller composing two scripts on one line has to align
+/// their baselines, and `blit_rgb565_color` takes a box top: passing both runs
+/// the same `oy` puts them on two different baselines, since each resolves its
+/// own face's ascent.
+pub fn ascent_for(script: Script, px_size: f32) -> usize {
+    let fd = font_for_script(script);
+    match fd.body.horizontal_line_metrics(px_size) {
+        Some(m) => m.ascent.max(0.0) as usize,
+        None => px_size as usize,
+    }
+}
+
 pub fn line_height_for(script: Script, px_size: f32) -> usize {
     let fd = font_for_script(script);
     let lm = fd.body.horizontal_line_metrics(px_size);
