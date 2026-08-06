@@ -269,8 +269,22 @@ static BODY_SELECTOR_OBJ: LazyLock<Selector> =
 static BLOCK_SELECTOR_TAGS: std::sync::LazyLock<std::collections::HashSet<&'static str>> =
     std::sync::LazyLock::new(|| {
         [
-            "p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "blockquote", "pre", "div",
-            "figure", "img", "image", "svg", "table",
+            "p",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "li",
+            "blockquote",
+            "pre",
+            "div",
+            "figure",
+            "img",
+            "image",
+            "svg",
+            "table",
         ]
         .into_iter()
         .collect()
@@ -284,8 +298,7 @@ static BLOCK_SELECTOR_TAGS: std::sync::LazyLock<std::collections::HashSet<&'stat
 static NON_CONTENT_TAGS: std::sync::LazyLock<std::collections::HashSet<&'static str>> =
     std::sync::LazyLock::new(|| {
         [
-            "script", "style", "link", "meta", "head", "title", "noscript", "template",
-            "base",
+            "script", "style", "link", "meta", "head", "title", "noscript", "template", "base",
         ]
         .into_iter()
         .collect()
@@ -318,8 +331,7 @@ fn collect_orphan_text(html: &Html, text: &mut String, segs: &mut Vec<TextSegmen
                     }
                 }
                 scraper::Node::Element(e) => {
-                    if BLOCK_SELECTOR_TAGS.contains(e.name())
-                        || NON_CONTENT_TAGS.contains(e.name())
+                    if BLOCK_SELECTOR_TAGS.contains(e.name()) || NON_CONTENT_TAGS.contains(e.name())
                     {
                         continue;
                     }
@@ -780,9 +792,7 @@ fn list_context(
     let Some(list_elem) = owner else {
         return (None, 0);
     };
-    if list_marker_suppressed(list_elem, style_sheet)
-        && has_ancestor(list_elem, &["nav"])
-    {
+    if list_marker_suppressed(list_elem, style_sheet) && has_ancestor(list_elem, &["nav"]) {
         return (Some(ListKind::Unmarked), depth);
     }
     if list_elem.value().name() == "ol" {

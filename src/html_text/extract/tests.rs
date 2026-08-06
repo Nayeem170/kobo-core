@@ -627,8 +627,9 @@ fn inline_svg_keeps_case_sensitive_attributes() {
 /// Capturing the wrapper too would draw an empty box over the real picture.
 #[test]
 fn svg_wrapping_a_referenced_image_is_not_captured_as_markup() {
-    let (_, segs) =
-        extract(r#"<figure><svg><image xlink:href="graph.png"/></svg><figcaption>F</figcaption></figure>"#);
+    let (_, segs) = extract(
+        r#"<figure><svg><image xlink:href="graph.png"/></svg><figcaption>F</figcaption></figure>"#,
+    );
     let fig = segs.iter().find(|s| s.tag == "figure").expect("figure");
     assert_eq!(fig.src.as_deref(), Some("graph.png"));
     assert!(fig.svg.is_none(), "{:?}", fig.svg);
@@ -637,7 +638,8 @@ fn svg_wrapping_a_referenced_image_is_not_captured_as_markup() {
 /// A drawing outside any `<figure>` still has to reach the page.
 #[test]
 fn standalone_inline_svg_becomes_an_image_segment() {
-    let (_, segs) = extract(r#"<p>Before</p><svg width="10" height="10"><circle r="5"/></svg><p>After</p>"#);
+    let (_, segs) =
+        extract(r#"<p>Before</p><svg width="10" height="10"><circle r="5"/></svg><p>After</p>"#);
     let img = segs
         .iter()
         .find(|s| s.svg.is_some())
@@ -650,8 +652,9 @@ fn standalone_inline_svg_becomes_an_image_segment() {
 /// selector emitted a second segment and the diagram rendered twice.
 #[test]
 fn inline_svg_inside_a_figure_is_emitted_once() {
-    let (_, segs) =
-        extract(r#"<figure><svg width="10" height="10"><circle r="5"/></svg><figcaption>F</figcaption></figure>"#);
+    let (_, segs) = extract(
+        r#"<figure><svg width="10" height="10"><circle r="5"/></svg><figcaption>F</figcaption></figure>"#,
+    );
     assert_eq!(
         segs.iter().filter(|s| s.svg.is_some()).count(),
         1,
@@ -714,7 +717,11 @@ fn unescaped_custom_tag_no_longer_vanishes() {
         r#"<p>Real paragraph one.</p><examples><example><input>The cart total is wrong.</input></example></examples><p>Real paragraph two.</p>"#,
     );
     let ps: Vec<_> = segs.iter().filter(|s| s.tag == "p").collect();
-    assert_eq!(ps.len(), 2, "both real paragraphs must still extract: {segs:#?}");
+    assert_eq!(
+        ps.len(),
+        2,
+        "both real paragraphs must still extract: {segs:#?}"
+    );
     assert!(
         text.contains("The cart total is wrong."),
         "the orphaned custom-tag text must reach the chapter text: {text:?}"
@@ -789,7 +796,8 @@ fn script_and_style_at_body_end_do_not_leak() {
         "CSS must not reach chapter text: {text:?}"
     );
     assert!(
-        segs.iter().all(|s| s.tag != "div" || !text[s.start..s.end].contains("bar()")),
+        segs.iter()
+            .all(|s| s.tag != "div" || !text[s.start..s.end].contains("bar()")),
         "no orphan segment should carry script text: {segs:#?}"
     );
 }

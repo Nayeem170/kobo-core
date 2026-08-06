@@ -132,8 +132,15 @@ impl Fb {
     /// white, so a full-width band would flatten anything colourful sharing those
     /// rows. Bounding the region horizontally keeps the waveform on the animated
     /// area alone.
-    pub fn present_rect(&self, buf: &[u8], w: usize, h: usize,
-        rect: &UpdateRegion, waveform: u32, full: bool) {
+    pub fn present_rect(
+        &self,
+        buf: &[u8],
+        w: usize,
+        h: usize,
+        rect: &UpdateRegion,
+        waveform: u32,
+        full: bool,
+    ) {
         let x0 = rect.x.min(self.xres);
         let y0 = rect.y.min(self.yres);
         let x1 = (rect.x + rect.w).min(w).min(self.xres);

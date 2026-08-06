@@ -198,12 +198,12 @@ fn decode_entity(bytes: &[u8]) -> Option<(char, usize)> {
         _ => {
             if body.first() == Some(&b'#') {
                 let num = &body[1..];
-                let cp = if let Some(rest) = num.strip_prefix(b"x").or_else(|| num.strip_prefix(b"X"))
-                {
-                    u32::from_str_radix(std::str::from_utf8(rest).ok()?, 16).ok()?
-                } else {
-                    std::str::from_utf8(num).ok()?.parse::<u32>().ok()?
-                };
+                let cp =
+                    if let Some(rest) = num.strip_prefix(b"x").or_else(|| num.strip_prefix(b"X")) {
+                        u32::from_str_radix(std::str::from_utf8(rest).ok()?, 16).ok()?
+                    } else {
+                        std::str::from_utf8(num).ok()?.parse::<u32>().ok()?
+                    };
                 Some((char::from_u32(cp)?, len))
             } else {
                 None
@@ -381,7 +381,8 @@ pub(crate) fn inline_foreignobject_text(raw: &[u8]) -> Vec<u8> {
                     let total_h = lines.len() as f32 * lh;
                     let start_y = (h as f32 - total_h) / 2.0 + lh * 0.72;
                     let cx = fmt_attr((w / 2.0) as f32);
-                    let mut s = format!("<text x=\"{cx}\" text-anchor=\"middle\" font-size=\"14\">");
+                    let mut s =
+                        format!("<text x=\"{cx}\" text-anchor=\"middle\" font-size=\"14\">");
                     for (i, line) in lines.iter().enumerate() {
                         let y = fmt_attr(start_y + i as f32 * lh);
                         let esc = xml_text_escape(line);
@@ -497,8 +498,7 @@ pub fn rasterize_svg(raw: &[u8], max_w: usize, max_h: usize) -> Option<DecodedIm
 mod tests {
     use super::*;
 
-    const SQUARE: &str =
-        r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><rect width="100" height="50" fill="black"/></svg>"#;
+    const SQUARE: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="50"><rect width="100" height="50" fill="black"/></svg>"#;
 
     #[test]
     fn sniffs_plain_and_prologued_svg() {
@@ -606,9 +606,19 @@ mod tests {
             s.contains(r#"<text x="60" text-anchor="middle" font-size="14">"#),
             "expected a centred <text>, got: {s}"
         );
-        assert!(s.contains(r#"<tspan x="60""#), "expected a <tspan>, got: {s}");
-        assert!(s.contains("You write rules"), "label text missing, got: {s}");
-        assert_eq!(s.matches("<tspan").count(), 1, "short label should be one line, got: {s}");
+        assert!(
+            s.contains(r#"<tspan x="60""#),
+            "expected a <tspan>, got: {s}"
+        );
+        assert!(
+            s.contains("You write rules"),
+            "label text missing, got: {s}"
+        );
+        assert_eq!(
+            s.matches("<tspan").count(),
+            1,
+            "short label should be one line, got: {s}"
+        );
     }
 
     /// That rewrite must actually produce visible ink at render time, not just
@@ -636,7 +646,10 @@ mod tests {
         assert!(!s.contains("<text"), "no replacement text for empty label");
         // Still parses and renders without panicking.
         let img = rasterize_svg(svg, 40, 40);
-        assert!(img.is_some(), "should still render after dropping the label");
+        assert!(
+            img.is_some(),
+            "should still render after dropping the label"
+        );
     }
 
     /// The common case -- a plain SVG with no foreignObject -- must pass through
@@ -678,7 +691,11 @@ mod tests {
         const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
         let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
         for chunk in input.chunks(3) {
-            let b = [chunk[0], *chunk.get(1).unwrap_or(&0), *chunk.get(2).unwrap_or(&0)];
+            let b = [
+                chunk[0],
+                *chunk.get(1).unwrap_or(&0),
+                *chunk.get(2).unwrap_or(&0),
+            ];
             out.push(T[(b[0] >> 2) as usize] as char);
             out.push(T[(((b[0] & 0x03) << 4) | (b[1] >> 4)) as usize] as char);
             out.push(if chunk.len() > 1 {
@@ -707,7 +724,10 @@ mod tests {
             .chunks(3)
             .filter(|p| p[0] > 120 && p[1] < 90 && p[2] < 90)
             .count();
-        assert!(reddish > 0, "embedded raster should decode, not be blank; reddish={reddish}");
+        assert!(
+            reddish > 0,
+            "embedded raster should decode, not be blank; reddish={reddish}"
+        );
     }
 
     /// Content drawn outside the declared viewBox (a diagram exporter that
@@ -717,7 +737,10 @@ mod tests {
         let bleed = r#"<svg xmlns="http://www.w3.org/2000/svg" width="50" height="50"><rect x="-100" y="0" width="30" height="30" fill="black"/></svg>"#;
         let img = rasterize_svg(bleed.as_bytes(), 300, 100).expect("renders");
         let ink = img.rgb.chunks(3).filter(|p| p[0] < 100).count();
-        assert!(ink > 0, "off-canvas content should be pulled into view, not clipped away");
+        assert!(
+            ink > 0,
+            "off-canvas content should be pulled into view, not clipped away"
+        );
     }
 
     /// The actual complaint this exists for: a label wider than its box must
@@ -758,7 +781,11 @@ mod tests {
         let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40"><foreignObject width="200" height="24"><p>Hi</p></foreignObject></svg>"##;
         let out = inline_foreignobject_text(svg);
         let s = std::str::from_utf8(&out).unwrap();
-        assert_eq!(s.matches("<tspan").count(), 1, "short label should be one line, got: {s}");
+        assert_eq!(
+            s.matches("<tspan").count(),
+            1,
+            "short label should be one line, got: {s}"
+        );
         assert!(s.contains("Hi"));
     }
 
@@ -769,7 +796,11 @@ mod tests {
         let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40"><foreignObject width="30" height="24"><p>supercalifragilisticexpialidocious</p></foreignObject></svg>"##;
         let out = inline_foreignobject_text(svg);
         let s = std::str::from_utf8(&out).unwrap();
-        assert_eq!(s.matches("<tspan").count(), 1, "one word is one line even if it overflows, got: {s}");
+        assert_eq!(
+            s.matches("<tspan").count(),
+            1,
+            "one word is one line even if it overflows, got: {s}"
+        );
         assert!(
             s.contains("supercalifragilisticexpialidocious"),
             "the word must survive intact, got: {s}"

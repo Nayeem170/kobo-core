@@ -443,9 +443,17 @@ fn a_non_resolving_parent_keeps_its_resolving_children() {
         vec![nav("Chapter One", "OEBPS/Text/ch01.xhtml", vec![])],
     )];
     let tree = build_toc_tree(&toc, &chs);
-    assert_eq!(tree.len(), 1, "the divider node itself must survive: {tree:#?}");
+    assert_eq!(
+        tree.len(),
+        1,
+        "the divider node itself must survive: {tree:#?}"
+    );
     assert_eq!(tree[0].chapter, None, "divider names no real chapter");
-    assert_eq!(tree[0].children.len(), 1, "its resolving child must survive");
+    assert_eq!(
+        tree[0].children.len(),
+        1,
+        "its resolving child must survive"
+    );
     assert_eq!(tree[0].children[0].chapter, Some(0));
 }
 

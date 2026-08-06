@@ -175,7 +175,10 @@ fn decode_image_does_not_upscale() {
     img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
         .unwrap();
     let decoded = decode_image(&buf, 976, 976).unwrap();
-    assert_eq!(decoded.width, 48, "small image must not be upscaled to max_w");
+    assert_eq!(
+        decoded.width, 48,
+        "small image must not be upscaled to max_w"
+    );
     assert_eq!(decoded.height, 48);
 }
 

@@ -519,9 +519,7 @@ fn build_toc_tree(toc: &[epub::doc::NavPoint], chapters: &[Chapter]) -> Vec<TocE
             children,
         })
     }
-    toc.iter()
-        .filter_map(|np| walk(np, 0, chapters))
-        .collect()
+    toc.iter().filter_map(|np| walk(np, 0, chapters)).collect()
 }
 
 /// Flatten the EPUB TOC tree into a label-by-path map.

@@ -96,7 +96,11 @@ pub fn scan_input_devices() -> Option<InputDevices> {
     }
     let content = fs::read_to_string("/proc/bus/input/devices").ok()?;
     let (mut touch_path, mut power_path) = parse_input_devices(&content);
-    log::info!("hw: parse_input_devices raw: touch={:?} power={:?}", touch_path, power_path);
+    log::info!(
+        "hw: parse_input_devices raw: touch={:?} power={:?}",
+        touch_path,
+        power_path
+    );
     if touch_path.is_none() {
         let ev1 = PathBuf::from("/dev/input/event1");
         if ev1.exists() {
