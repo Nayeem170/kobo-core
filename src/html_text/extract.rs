@@ -251,7 +251,7 @@ pub fn extract_with_style(xhtml: &str, style: &BookStyle) -> (String, Vec<TextSe
         segs.extend(produced);
     }
 
-    resolve_blockquote_context(&mut segs, &html);
+    resolve_blockquote_context(&mut segs, &html, &text);
 
     let extra = scan_raw_svg_images(xhtml, &segs, &mut text);
     segs.extend(extra);
@@ -978,7 +978,7 @@ static TD_SELECTOR_OBJ: LazyLock<Selector> =
 static TH_SELECTOR_OBJ: LazyLock<Selector> =
     LazyLock::new(|| Selector::parse("th").expect("selector"));
 
-fn resolve_blockquote_context(segs: &mut [TextSegment], html: &Html) {
+fn resolve_blockquote_context(segs: &mut [TextSegment], html: &Html, text: &str) {
     let bq_sel = BQ_SELECTOR_OBJ.clone();
     let block_sel = BLOCK_SELECTOR_OBJ.clone();
     for bq_elem in html.select(&bq_sel) {
@@ -998,17 +998,12 @@ fn resolve_blockquote_context(segs: &mut [TextSegment], html: &Html) {
             if seg.tag == "blockquote" || seg.tag == "div" || seg.src.is_some() {
                 continue;
             }
-            if seg.start >= bq_trimmed.len() {
-                continue;
-            }
-            let seg_text = if seg.end <= bq_trimmed.len() {
-                &bq_trimmed[seg.start..seg.end]
-            } else {
-                continue;
-            };
-            if seg_text.is_empty() {
-                continue;
-            }
+                let Some(seg_text) = text.get(seg.start..seg.end) else {
+                    continue;
+                };
+                if seg_text.is_empty() {
+                    continue;
+                }
             if !bq_trimmed.contains(seg_text) {
                 continue;
             }

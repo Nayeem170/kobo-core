@@ -173,27 +173,28 @@ pub fn bt_toggle(on: bool) {
     // the (async, multi-retry) connect is still settling.
     LAST_BT_TOGGLE_MS.store(now_ms(), Ordering::Relaxed);
     if on {
-        // Power the adapter up SYNCHRONOUSLY (matches develop exactly). The Set
-        // Powered call is fast and never hangs, and doing it on the caller's
-        // thread means the adapter is already on before reconnect runs - which is
-        // what made develop's single ON tap connect reliably.
-        if let Err(e) = dbus_cmd()
-            .args([
-                DBUS_DEVICE1_PATH,
-                DBUS_PROPS_SET,
-                DBUS_ADAPTER1_IFACE,
-                "string:Powered",
-                "variant:boolean:true",
-            ])
-            .status()
-        {
-            warn!("bt: adapter power-on failed: {e}");
-        }
-        info!("bt: adapter powered on (bus={})", bt_bus());
-        // Reconnect (Connect can retry for several seconds) off the main loop.
-        // best-effort: the handle is dropped so the thread runs detached
-        let _ = std::thread::spawn(reconnect_bt);
-        info!("bt: turned ON + reconnecting");
+        // Power-on + reconnect off the main loop. The synchronous
+        // Set Powered call can block on a cold or busy DBus daemon,
+        // which freezes the UI. Spawning a single thread that does
+        // power-on then reconnect avoids the race of two threads
+        // (power-on and reconnect) both hitting the adapter at once.
+        let _ = std::thread::spawn(|| {
+            if let Err(e) = dbus_cmd()
+                .args([
+                    DBUS_DEVICE1_PATH,
+                    DBUS_PROPS_SET,
+                    DBUS_ADAPTER1_IFACE,
+                    "string:Powered",
+                    "variant:boolean:true",
+                ])
+                .status()
+            {
+                warn!("bt: adapter power-on failed: {e}");
+            }
+            info!("bt: adapter powered on (bus={})", bt_bus());
+            reconnect_bt();
+        });
+        info!("bt: turned ON (power-on + reconnect thread spawned)");
     } else {
         // Power-down path: a Device1.Disconnect can block indefinitely when the
         // configured speaker isn't actually linked, and callers (sleep entry,
