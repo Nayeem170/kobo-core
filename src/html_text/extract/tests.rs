@@ -793,3 +793,33 @@ fn script_and_style_at_body_end_do_not_leak() {
         "no orphan segment should carry script text: {segs:#?}"
     );
 }
+
+/// A blockquote whose scraped text diverges from the chapter text (here: a
+/// leading `<figure>` caption, which the scraper includes but the chapter
+/// text excludes) and carries multi-byte characters. The blockquote-context
+/// resolver used to slice the blockquote's scraped text with chapter-text
+/// offsets; with the caption pushing the multi-byte run to the front, a later
+/// paragraph's offset landed inside a 3-byte smart quote and panicked. The
+/// scan thread died and the whole library came back empty (one bad book
+/// blanks every book). The fix slices the chapter text with those offsets.
+#[test]
+fn blockquote_context_does_not_panic_on_multibyte_scrape_divergence() {
+    let rq = "\u{2019}"; // right single quote, 3 bytes in UTF-8
+    let xhtml = format!(
+        "<blockquote>\
+         <figure><img src=\"x.png\"/><figcaption>{rq}{rq}{rq}</figcaption></figure>\
+         <p>XX</p>\
+         </blockquote>"
+    );
+    let (_text, segs) = extract(&xhtml);
+    // Reaching here means no panic. The blockquote still flags its paragraph.
+    let flagged = segs
+        .iter()
+        .filter(|s| s.tag == "p")
+        .filter(|s| s.blockquote != BlockquoteKind::None)
+        .count();
+    assert!(
+        flagged >= 1,
+        "the paragraph inside the blockquote must carry blockquote context: {segs:#?}"
+    );
+}
