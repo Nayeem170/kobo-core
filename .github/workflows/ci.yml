@@ -8,7 +8,7 @@ on:
       - "Cargo.lock"
       - ".github/workflows/ci.yml"
   push:
-    branches: [main]
+    branches: [main, develop]
     paths:
       - "src/**"
       - "Cargo.toml"
@@ -27,7 +27,7 @@ jobs:
       - name: fmt
         run: cargo fmt --all -- --check
       - name: clippy
-        run: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
       - name: check no-default-features
         run: cargo check --no-default-features
       - name: test
