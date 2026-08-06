@@ -998,17 +998,12 @@ fn resolve_blockquote_context(segs: &mut [TextSegment], html: &Html, text: &str)
             if seg.tag == "blockquote" || seg.tag == "div" || seg.src.is_some() {
                 continue;
             }
-            if seg.start >= text.len() {
-                continue;
-            }
-            let seg_text = if seg.end <= text.len() {
-                &text[seg.start..seg.end]
-            } else {
-                continue;
-            };
-            if seg_text.is_empty() {
-                continue;
-            }
+                let Some(seg_text) = text.get(seg.start..seg.end) else {
+                    continue;
+                };
+                if seg_text.is_empty() {
+                    continue;
+                }
             if !bq_trimmed.contains(seg_text) {
                 continue;
             }
