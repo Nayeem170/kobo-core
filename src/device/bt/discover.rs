@@ -114,8 +114,8 @@ pub fn discover_paired_devices() -> Vec<PairedDevice> {
         Err(_) => return Vec::new(),
     };
     let text = String::from_utf8_lossy(&out.stdout);
-    let result = parse_managed_objects(&text);
-    result
+
+    parse_managed_objects(&text)
 }
 
 pub(super) fn discover_connected_paired_device() -> Option<String> {
@@ -138,7 +138,7 @@ pub fn bt_target_device() -> Option<String> {
         .iter()
         .find(|d| d.connected)
         .map(|d| d.path.clone())
-        .or_else(|| get_last_ok_device())
+        .or_else(get_last_ok_device)
         .or_else(|| {
             fs::read_to_string(crate::device::paths::BT_CONFIG_FILE)
                 .ok()

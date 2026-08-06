@@ -526,7 +526,7 @@ mod tests {
     #[test]
     fn svg_bytes_deep_inside_a_blob_are_not_markup() {
         let mut blob = vec![0x89, b'P', b'N', b'G'];
-        blob.extend(std::iter::repeat(0u8).take(4096));
+        blob.extend(std::iter::repeat_n(0u8, 4096));
         blob.extend_from_slice(b"<svg");
         assert!(!is_svg(&blob));
     }
@@ -689,7 +689,7 @@ mod tests {
 
     fn b64(input: &[u8]) -> String {
         const T: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+        let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
         for chunk in input.chunks(3) {
             let b = [
                 chunk[0],

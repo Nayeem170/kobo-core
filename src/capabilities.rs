@@ -100,11 +100,13 @@ mod tests {
 
     #[test]
     fn mock_battery_and_names_round_trip() {
-        let mut m = MockCapabilities::default();
-        m.battery = 73;
-        m.wifi_ssid = Some("Net".into());
-        m.bt_device = Some("Speaker".into());
-        m.clock = "9:41 PM".into();
+        let m = MockCapabilities {
+            battery: 73,
+            wifi_ssid: Some("Net".into()),
+            bt_device: Some("Speaker".into()),
+            clock: "9:41 PM".into(),
+            ..Default::default()
+        };
         assert_eq!(m.battery_pct(), 73);
         assert_eq!(m.wifi_name().as_deref(), Some("Net"));
         assert_eq!(m.bt_name().as_deref(), Some("Speaker"));

@@ -430,10 +430,10 @@ fn is_real_sentence_end(chars: &[(usize, char)], i: usize) -> bool {
     if matches!(prev, Some(c) if c.is_ascii_digit()) {
         return false;
     }
-    if matches!(prev, Some(c) if c.is_ascii_uppercase()) {
-        if !matches!(char_at(chars, (i as isize) - 2), Some(c) if c.is_ascii_alphanumeric()) {
-            return false;
-        }
+    if matches!(prev, Some(c) if c.is_ascii_uppercase())
+        && !matches!(char_at(chars, (i as isize) - 2), Some(c) if c.is_ascii_alphanumeric())
+    {
+        return false;
     }
     if SENTENCE_ABBREVIATIONS.contains(&abbrev_token_before(chars, i).as_str()) {
         return false;

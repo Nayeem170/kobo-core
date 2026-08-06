@@ -150,7 +150,7 @@ mod tests {
         // 2 s of mono @ 24 kHz. The output must grow ~OUT_RATE/IN_RATE (1.8375x)
         // to 44.1 kHz; the lead-silence + delay-trim are small relative to 2 s,
         // so the result lands in a tight band around 88 200 samples.
-        let input: Vec<i16> = (0..48_000).map(|i| (i as i32 & 0xff) as i16).collect();
+        let input: Vec<i16> = (0..48_000).map(|i| (i & 0xff) as i16).collect();
         let out = resample_mono(&input).expect("resample ok");
         assert!(!out.is_empty());
         let expected = 48_000.0 * OUT_RATE as f32 / IN_RATE as f32;

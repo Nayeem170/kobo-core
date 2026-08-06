@@ -329,20 +329,17 @@ fn refresh_devices(
         if already.contains(path) || skip_devs.iter().any(|s| s == path) {
             continue;
         }
-        match std::fs::OpenOptions::new().read(true).open(path) {
-            Ok(f) => {
-                let fd = f.as_raw_fd();
-                unsafe {
-                    let flags = libc::fcntl(fd, libc::F_GETFL);
-                    libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                }
-                info!("media-keys: opened {}", path);
-                open.push(MediaDevice {
-                    path: path.clone(),
-                    file: f,
-                });
+        if let Ok(f) = std::fs::OpenOptions::new().read(true).open(path) {
+            let fd = f.as_raw_fd();
+            unsafe {
+                let flags = libc::fcntl(fd, libc::F_GETFL);
+                libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
             }
-            Err(_) => {}
+            info!("media-keys: opened {}", path);
+            open.push(MediaDevice {
+                path: path.clone(),
+                file: f,
+            });
         }
     }
 }

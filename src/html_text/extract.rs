@@ -253,7 +253,7 @@ pub fn extract_with_style(xhtml: &str, style: &BookStyle) -> (String, Vec<TextSe
 
     resolve_blockquote_context(&mut segs, &html, &text);
 
-    let extra = scan_raw_svg_images(xhtml, &segs, &mut text);
+    let extra = scan_raw_svg_images(xhtml, &segs, &text);
     segs.extend(extra);
 
     collect_orphan_text(&html, &mut text, &mut segs);
@@ -1148,7 +1148,7 @@ fn extract_table_segments(
 /// belonging to the title above them.
 const TABLE_CELL_INDENT_EM: f32 = 1.5;
 
-fn scan_raw_svg_images(xhtml: &str, segs: &[TextSegment], text: &mut String) -> Vec<TextSegment> {
+fn scan_raw_svg_images(xhtml: &str, segs: &[TextSegment], text: &str) -> Vec<TextSegment> {
     let captured_srcs: std::collections::HashSet<String> =
         segs.iter().filter_map(|s| s.src.clone()).collect();
     let mut extra: Vec<TextSegment> = Vec::new();

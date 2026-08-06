@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 Nayeem Bin Ahsan
 #![doc = include_str!("../README.md")]
+// Render/device functions legitimately pass buffer + stride + region params;
+// collapsing them into a struct adds ceremony without clarity, so this lint
+// is disabled crate-wide rather than scattered per-function.
+#![allow(clippy::too_many_arguments)]
 
 #[cfg(feature = "audio")]
 pub mod audio;

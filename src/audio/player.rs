@@ -218,7 +218,7 @@ impl Player {
 
     /// ACTUAL stereo frames buffered in the kernel socket (via TIOCOUTQ).
     /// Unlike lead_frames() (wall-clock estimate), this is a direct measurement
-    /// - no drift. Use for pacing to avoid both underrun (fot-fot) and
+    /// with no drift. Use for pacing to avoid both underrun (fot-fot) and
     /// unbounded buffer (E8: pause latency + resume overlap).
     pub fn socket_buffered_frames(&self) -> u64 {
         self.sink.unsent_bytes() as u64 / 4 // 2 bytes/sample x 2 channels

@@ -272,29 +272,26 @@ const FONT_SEARCH_DIRS: &[&str] = &[FONTS_DIR, USER_FONTS_DIR, SYSTEM_FONTS_DIR]
 /// has available so we can reuse Kobo's own fonts instead of shipping them).
 pub fn log_available_fonts() {
     for dir in FONT_SEARCH_DIRS {
-        match fs::read_dir(dir) {
-            Ok(entries) => {
-                let mut names: Vec<String> = entries
-                    .flatten()
-                    .filter_map(|e| {
-                        let p = e.path();
-                        let ext = p
-                            .extension()
-                            .and_then(|x| x.to_str())
-                            .map(|s| s.to_ascii_lowercase())
-                            .unwrap_or_default();
-                        if matches!(ext.as_str(), "ttf" | "otf" | "ttc") {
-                            p.file_name()
-                                .and_then(|n| n.to_str())
-                                .map(|s| s.to_string())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                names.sort();
-            }
-            Err(_) => (),
+        if let Ok(entries) = fs::read_dir(dir) {
+            let mut names: Vec<String> = entries
+                .flatten()
+                .filter_map(|e| {
+                    let p = e.path();
+                    let ext = p
+                        .extension()
+                        .and_then(|x| x.to_str())
+                        .map(|s| s.to_ascii_lowercase())
+                        .unwrap_or_default();
+                    if matches!(ext.as_str(), "ttf" | "otf" | "ttc") {
+                        p.file_name()
+                            .and_then(|n| n.to_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            names.sort();
         }
     }
 }

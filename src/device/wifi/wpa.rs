@@ -148,16 +148,15 @@ pub(super) fn find_wpa_conf() -> Option<String> {
 }
 
 pub(super) fn find_wpa_binary() -> Option<&'static str> {
-    for p in WPA_SUPPLICANT_CANDIDATES {
-        if std::path::Path::new(p).exists()
-            || Command::new("which")
-                .arg(p)
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false)
-        {
-            return Some(p);
-        }
-    }
-    None
+    WPA_SUPPLICANT_CANDIDATES
+        .iter()
+        .find(|&p| {
+            std::path::Path::new(p).exists()
+                || Command::new("which")
+                    .arg(p)
+                    .output()
+                    .map(|o| o.status.success())
+                    .unwrap_or(false)
+        })
+        .map(|v| v as _)
 }

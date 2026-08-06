@@ -39,8 +39,7 @@ fn synth_timeout_secs(text: &str) -> u64 {
 ///   codepoint renders correctly.
 /// - Smart quotes stripped: Edge reads them literally or skips them.
 fn normalize_tts_text(text: &str) -> String {
-    text.replace('\u{0964}', ". ")
-        .replace('\u{0965}', ". ")
+    text.replace(['\u{0964}', '\u{0965}'], ". ")
         .replace("\u{09AF}\u{09BC}", "\u{09DF}")
         .replace(['\u{201C}', '\u{201D}', '"', '\u{2018}', '\u{2019}'], "")
         .trim()

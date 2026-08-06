@@ -149,7 +149,7 @@ fn write_fixture_epub(path: &Path, title: &str, chapters: &[(&str, &str)]) {
     zip.write_all(ncx.as_bytes()).unwrap();
 
     for (href, xhtml) in chapters {
-        zip.start_file(&format!("OEBPS/{href}"), opts).unwrap();
+        zip.start_file(format!("OEBPS/{href}"), opts).unwrap();
         zip.write_all(xhtml.as_bytes()).unwrap();
     }
 
@@ -255,7 +255,7 @@ fn build_toc_map_resolves_by_stripped_path() {
         Some("Intro")
     );
     assert!(
-        map.get("OEBPS/intro.xhtml#sec1").is_none(),
+        !map.contains_key("OEBPS/intro.xhtml#sec1"),
         "fragment must be stripped from key"
     );
 }
