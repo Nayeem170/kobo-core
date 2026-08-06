@@ -10,7 +10,7 @@
 
 use crate::html_text::{
     extract_with_indents, extract_with_style, parse_book_style, BookStyle, IndentMap, LinkRun,
-    TextSegment,
+    StyleRun, TextSegment,
 };
 use log::warn;
 use std::path::Path;
@@ -37,6 +37,25 @@ pub struct Chapter {
     pub epub_path: String,
     /// Chapter XHTML path in the archive (for resolving relative image srcs).
     pub chapter_path: String,
+    /// Pre-built display body text with list markers, `\n` separators, heading
+    /// text, and figure captions. All byte-offset consumers (rows, bookmarks,
+    /// reading position, TTS cursor, link hit-testing) operate on offsets into
+    /// this string. Built deterministically from `text` + `segments` at cache
+    /// time so `build_state()` does not rebuild it.
+    #[serde(default)]
+    pub body: String,
+    /// Body offsets for each segment in `segments`. `seg_body_start[i]` is the
+    /// byte offset into `body` where segment `i` starts (after its leading `\n`
+    /// separator if any). Used by `anchor_offset()` to convert segment positions
+    /// to body offsets.
+    #[serde(default)]
+    pub seg_body_start: Vec<usize>,
+    /// Style runs (bold/italic/link) rebased onto `body` offsets.
+    #[serde(default)]
+    pub body_styles: Vec<StyleRun>,
+    /// Link runs rebased onto `body` offsets.
+    #[serde(default)]
+    pub body_links: Vec<LinkRun>,
 }
 
 impl Chapter {
@@ -63,6 +82,10 @@ impl Chapter {
             images: Vec::new(),
             epub_path: String::new(),
             chapter_path: String::new(),
+            body: String::new(),
+            seg_body_start: Vec::new(),
+            body_styles: Vec::new(),
+            body_links: Vec::new(),
         }
     }
 
@@ -83,6 +106,10 @@ impl Chapter {
             images: Vec::new(),
             epub_path: String::new(),
             chapter_path: String::new(),
+            body: String::new(),
+            seg_body_start: Vec::new(),
+            body_styles: Vec::new(),
+            body_links: Vec::new(),
         }
     }
 
@@ -386,6 +413,7 @@ pub fn resolve_link(chapters: &[Chapter], from_chapter: usize, href: &str) -> Op
 }
 
 /// Chapter-text offset an anchor resolves to, or 0 for the chapter top.
+/// Returns a body offset when the chapter has a pre-built body.
 pub fn anchor_offset(chapters: &[Chapter], target: &LinkTarget) -> usize {
     let Some(chapter) = chapters.get(target.chapter) else {
         return 0;
@@ -393,10 +421,18 @@ pub fn anchor_offset(chapters: &[Chapter], target: &LinkTarget) -> usize {
     let Some(anchor) = target.anchor.as_deref() else {
         return 0;
     };
-    chapter
+    let seg_idx = chapter
         .segments
         .iter()
-        .find(|s| s.id.as_deref() == Some(anchor))
+        .position(|s| s.id.as_deref() == Some(anchor));
+    if !chapter.body.is_empty() {
+        if let Some(idx) = seg_idx {
+            return chapter.seg_body_start.get(idx).copied().unwrap_or(0);
+        }
+        return 0;
+    }
+    seg_idx
+        .and_then(|idx| chapter.segments.get(idx))
         .map(|s| s.start)
         .unwrap_or(0)
 }
